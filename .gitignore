@@ -138,6 +138,7 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv*
 env/
 venv/
 ENV/
@@ -205,3 +206,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project artifacts
+*.joblib
+*.png
+models/model_diagnostics_*.txt
+models/requirements_*.txt
+models/run_config_*.json
+models/model_metadata.json
+*.log
