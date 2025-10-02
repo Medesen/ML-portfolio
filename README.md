@@ -86,7 +86,7 @@ All projects in this portfolio are licensed under the MIT License - see individu
 ## 👤 About
 
 **Mikkel Nielsen**  
-Machine Learning Engineer | MLOps Enthusiast
+Senior Data Scientist | Machine Learning Engineer | MLOps Enthusiast
 
 - **GitHub**: [@Medesen](https://github.com/Medesen)
 - **Repository**: [ML-portfolio](https://github.com/Medesen/ML-portfolio)
