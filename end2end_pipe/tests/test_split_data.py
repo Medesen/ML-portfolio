@@ -1,15 +1,8 @@
-import sys
-from pathlib import Path
-
 import pandas as pd
 import pytest
+from ml_portfolio_churn.features import split_data
 
-# Ensure project root is on sys.path so we can import src
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
-
-from src.main import split_data  # noqa: E402
+# With package installed in CI, no sys.path hacks are required
 
 
 def test_split_data_encodes_positive_label_yes():
@@ -48,7 +41,7 @@ def test_split_data_raises_if_pos_label_missing():
         }
     )
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError):
         split_data(df, training=True, positive_label="Yes")
 
 
@@ -60,7 +53,7 @@ def test_split_data_requires_both_classes_when_training():
         }
     )
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(ValueError):
         split_data(df, training=True, positive_label="Yes")
 
 

@@ -2,29 +2,52 @@
 """
 ARFF to CSV Converter
 
-This script converts ARFF files to CSV format for easier processing.
-Run this first if having issues with ARFF loading.
+Prefers `liac-arff` for robust parsing (quoted names, nominal types, escaped values),
+with a manual parser fallback when `liac-arff` is unavailable.
 """
 
 import csv
+import logging
 import re
 import sys
 from pathlib import Path
 
 
 def convert_arff_to_csv(arff_path: str, csv_path: str = None):
-    """Convert ARFF file to CSV format"""
+    """Convert ARFF file to CSV format using liac-arff if available."""
 
     arff_file = Path(arff_path)
     if not arff_file.exists():
-        print(f"Error: ARFF file not found: {arff_path}")
+        logging.getLogger(__name__).error(f"ARFF file not found: {arff_path}")
         return False
 
     if csv_path is None:
         csv_path = arff_file.with_suffix(".csv")
 
-    print(f"Converting {arff_path} to {csv_path}")
+    logging.getLogger(__name__).info(f"Converting {arff_path} to {csv_path}")
 
+    # Try liac-arff first
+    try:
+        import arff  # liac-arff
+
+        with open(arff_path, "r", encoding="utf-8") as f:
+            dataset = arff.load(f)
+        attributes = [name for name, _type in dataset.get("attributes", [])]
+        data = dataset.get("data", [])
+        with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(attributes)
+            for row in data:
+                writer.writerow(row)
+        logging.getLogger(__name__).info(f"Successfully converted to {csv_path} using liac-arff")
+        return True
+
+    except Exception as e_liac:
+        logging.getLogger(__name__).warning(
+            f"liac-arff unavailable or failed: {e_liac}. Falling back to manual parser..."
+        )
+
+    # Manual fallback parser
     try:
         with open(arff_path, "r", encoding="utf-8") as arff_file_obj:
             lines = arff_file_obj.readlines()
@@ -50,8 +73,8 @@ def convert_arff_to_csv(arff_path: str, csv_path: str = None):
                 data_start = i + 1
                 break
 
-        print(f"Found {len(attributes)} attributes")
-        print(f"Attributes: {attributes}")
+        logging.getLogger(__name__).info(f"Found {len(attributes)} attributes")
+        logging.getLogger(__name__).debug(f"Attributes: {attributes}")
 
         # Write CSV file
         with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
@@ -84,20 +107,25 @@ def convert_arff_to_csv(arff_path: str, csv_path: str = None):
                     writer.writerow(parsed)
                     row_count += 1
 
-            print(f"Converted {row_count} data rows")
+            logging.getLogger(__name__).info(f"Converted {row_count} data rows")
 
-        print(f"Successfully converted to {csv_path}")
+        logging.getLogger(__name__).info(f"Successfully converted to {csv_path}")
         return True
 
     except Exception as e:
-        print(f"Error converting file: {str(e)}")
+        logging.getLogger(__name__).error(f"Error converting file: {str(e)}")
         return False
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python convert_arff_to_csv.py <arff_file> [output_csv]")
-        print("Example: python convert_arff_to_csv.py data/dataset.arff data/dataset.csv")
+        logging.basicConfig(level=logging.INFO)
+        logging.getLogger(__name__).error(
+            "Usage: python convert_arff_to_csv.py <arff_file> [output_csv]"
+        )
+        logging.getLogger(__name__).error(
+            "Example: python convert_arff_to_csv.py data/dataset.arff data/dataset.csv"
+        )
         sys.exit(1)
 
     arff_path = sys.argv[1]

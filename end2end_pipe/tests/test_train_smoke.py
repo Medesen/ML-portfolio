@@ -1,14 +1,7 @@
-import sys
-from pathlib import Path
-
 import pandas as pd
+from ml_portfolio_churn.main import train_model
 
-# Ensure project root is on sys.path so we can import src
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.append(str(PROJECT_ROOT))
-
-from src.main import train_model  # noqa: E402
+# With package installed in CI, no sys.path hacks are required
 
 
 def test_smoke_train(tmp_path, monkeypatch):
@@ -25,8 +18,10 @@ def test_smoke_train(tmp_path, monkeypatch):
     df.to_csv(csv_path, index=False)
 
     # Point the module's DATA_DIR and CSV_PATH to our temp dataset
-    monkeypatch.setattr("src.main.DATA_DIR", data_dir)
-    monkeypatch.setattr("src.main.CSV_PATH", csv_path)
+    monkeypatch.setattr("ml_portfolio_churn.main.DATA_DIR", data_dir)
+    monkeypatch.setattr("ml_portfolio_churn.main.CSV_PATH", csv_path)
+    # Ensure the data loader reads from the same temporary CSV
+    monkeypatch.setattr("ml_portfolio_churn.data_io.CSV_PATH", csv_path)
 
     # Run a minimal training with larger splits so stratification works on tiny data
     config = {

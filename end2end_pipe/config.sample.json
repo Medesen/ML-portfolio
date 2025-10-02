@@ -1,0 +1,16 @@
+{
+  "random_state": 42,
+  "splits": {
+    "test_size": 0.2,
+    "val_size": 0.25
+  },
+  "grid_search": {
+    "cv": 3,
+    "scoring": "roc_auc",
+    "param_grid": {
+      "classifier__n_estimators": [50, 100],
+      "classifier__max_depth": [null, 10, 20]
+    }
+  }
+}
+

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: end2end_pipe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install dev tools (pytest, pre-commit, linters)
+          pip install -r requirements-dev.txt -c constraints.txt
+          # Install package with service extra; runtime deps are declared in pyproject
+          pip install -e .[service] -c constraints.txt
+          pre-commit install
+
+      - name: Run tests
+        run: |
+          pytest -q
+
+      - name: Run pre-commit on all files
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Smoke test FastAPI service
+        env:
+          SERVICE_TOKEN: ci-token
+        run: |
+          # Start service in background
+          uvicorn ml_portfolio_churn.service:app --host 127.0.0.1 --port 8000 & echo $! > app.pid
+          # Probe /health with retries
+          ok=0
+          for i in $(seq 1 20); do
+            if curl -fsS -H "Authorization: Bearer ${SERVICE_TOKEN}" http://127.0.0.1:8000/health; then
+              ok=1; break
+            fi
+            sleep 0.5
+          done
+          kill $(cat app.pid) || true
+          rm -f app.pid
+          if [ "$ok" != "1" ]; then
+            echo "Service health check failed"; exit 1
+          fi
+
