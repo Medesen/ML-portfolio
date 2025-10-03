@@ -1,13 +1,14 @@
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import Response
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel
 
 from .constants import MODELS_DIR
@@ -18,6 +19,9 @@ app = FastAPI(title="Churn Service", version="0.1.0")
 # Prometheus metrics
 PREDICTIONS_TOTAL = Counter("predictions_total", "Total prediction requests")
 PREDICTIONS_ERROR_TOTAL = Counter("predictions_error_total", "Total prediction errors")
+REQUEST_LATENCY = Histogram(
+    "request_latency_seconds", "Request latency in seconds", ["endpoint", "method", "status_code"]
+)
 
 # Very simple token auth (set SERVICE_TOKEN in the env to enable)
 SERVICE_TOKEN = os.getenv("SERVICE_TOKEN")
@@ -49,6 +53,56 @@ class DriftCheckRequest(BaseModel):
     """Optional request body for drift endpoint to analyze batch data."""
 
     records: Optional[List[Dict[str, Any]]] = None
+
+
+# Response Models
+class HealthResponse(BaseModel):
+    """Response model for /health endpoint."""
+
+    status: str
+
+
+class BaselineInfo(BaseModel):
+    """Baseline statistics summary."""
+
+    num_numerical_features: int
+    num_categorical_features: int
+    target_distribution: Dict[str, float]
+
+
+class DriftSchemaResponse(BaseModel):
+    """Response model for GET /drift endpoint."""
+
+    target_column: Optional[str] = None
+    feature_columns: List[str] = []
+    numeric_columns: List[str] = []
+    categorical_columns: List[str] = []
+    decision_threshold: Optional[float] = None
+    run_id: Optional[str] = None
+    has_baseline_stats: bool
+    baseline_info: Optional[BaselineInfo] = None
+
+
+class PredictionResponse(BaseModel):
+    """Response model for /predict endpoint."""
+
+    predictions: List[int]
+    probabilities: List[float]
+
+
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    """Record request latency for all endpoints."""
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start_time
+
+    # Record latency with labels
+    REQUEST_LATENCY.labels(
+        endpoint=request.url.path, method=request.method, status_code=str(response.status_code)
+    ).observe(duration)
+
+    return response
 
 
 @app.on_event("startup")
@@ -102,40 +156,41 @@ def _get_metadata() -> Dict[str, Any]:
     return _METADATA_CACHE or {}
 
 
-@app.get("/health")
-async def health(authorization: str | None = Header(default=None)) -> Dict[str, str]:
+@app.get("/health", response_model=HealthResponse)
+async def health(authorization: str | None = Header(default=None)):
+    """Health check endpoint. Returns 'ok' if model and metadata loaded, 'degraded' otherwise."""
     _auth_check(authorization)
     model_ok = _MODEL_CACHE is not None
     meta_ok = _METADATA_CACHE is not None
-    return {"status": "ok" if (model_ok and meta_ok) else "degraded"}
+    status = "ok" if (model_ok and meta_ok) else "degraded"
+    return HealthResponse(status=status)
 
 
-@app.get("/drift")
-async def drift_get(authorization: str | None = Header(default=None)) -> Dict[str, Any]:
+@app.get("/drift", response_model=DriftSchemaResponse)
+async def drift_get(authorization: str | None = Header(default=None)):
     """GET /drift - Return schema and baseline information."""
     _auth_check(authorization)
     meta = _get_metadata()
 
-    response = {
-        "target_column": meta.get("target_column"),
-        "feature_columns": meta.get("feature_columns", []),
-        "numeric_columns": meta.get("numeric_columns", []),
-        "categorical_columns": meta.get("categorical_columns", []),
-        "decision_threshold": meta.get("decision_threshold"),
-        "run_id": meta.get("run_id"),
-        "has_baseline_stats": "reference_statistics" in meta,
-    }
-
-    # Include summary of baseline stats if available
+    baseline_info = None
     if "reference_statistics" in meta:
         ref_stats = meta["reference_statistics"]
-        response["baseline_info"] = {
-            "num_numerical_features": len(ref_stats.get("numerical", {})),
-            "num_categorical_features": len(ref_stats.get("categorical", {})),
-            "target_distribution": ref_stats.get("target_distribution", {}),
-        }
+        baseline_info = BaselineInfo(
+            num_numerical_features=len(ref_stats.get("numerical", {})),
+            num_categorical_features=len(ref_stats.get("categorical", {})),
+            target_distribution=ref_stats.get("target_distribution", {}),
+        )
 
-    return response
+    return DriftSchemaResponse(
+        target_column=meta.get("target_column"),
+        feature_columns=meta.get("feature_columns", []),
+        numeric_columns=meta.get("numeric_columns", []),
+        categorical_columns=meta.get("categorical_columns", []),
+        decision_threshold=meta.get("decision_threshold"),
+        run_id=meta.get("run_id"),
+        has_baseline_stats="reference_statistics" in meta,
+        baseline_info=baseline_info,
+    )
 
 
 @app.post("/drift")
@@ -189,10 +244,9 @@ async def drift_post(
         raise HTTPException(status_code=500, detail=f"Drift analysis failed: {str(e)}")
 
 
-@app.post("/predict")
-async def predict(
-    req: PredictRequest, authorization: str | None = Header(default=None)
-) -> Dict[str, Any]:
+@app.post("/predict", response_model=PredictionResponse)
+async def predict(req: PredictRequest, authorization: str | None = Header(default=None)):
+    """Predict churn for a batch of records. Returns binary predictions and probabilities."""
     _auth_check(authorization)
     from .features import align_features_to_training_schema, split_data
 
@@ -220,10 +274,10 @@ async def predict(
         preds = (probs >= float(metadata.get("decision_threshold", 0.5))).astype(int)
 
         PREDICTIONS_TOTAL.inc()
-        return {
-            "predictions": preds.tolist(),
-            "probabilities": probs.tolist(),
-        }
+        return PredictionResponse(
+            predictions=preds.tolist(),
+            probabilities=probs.tolist(),
+        )
     except HTTPException:
         raise
     except Exception as e:

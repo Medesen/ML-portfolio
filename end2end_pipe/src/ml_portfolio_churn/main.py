@@ -652,12 +652,13 @@ def train_model(
             mlflow.set_tracking_uri(mlflow_uri)
             mlflow.set_experiment("churn_prediction")
             with mlflow.start_run() as run:
-                # Params
+                # Params - convert Pydantic model to dict for access
+                cfg_dict = config.model_dump() if hasattr(config, "model_dump") else config
                 mlflow.log_params(
                     {
-                        "random_state": config.get("random_state"),
-                        "cv": config.get("grid_search", {}).get("cv"),
-                        "scoring": config.get("grid_search", {}).get("scoring"),
+                        "random_state": cfg_dict.get("random_state"),
+                        "cv": cfg_dict.get("grid_search", {}).get("cv"),
+                        "scoring": cfg_dict.get("grid_search", {}).get("scoring"),
                     }
                 )
                 # Best classifier params (subset)
