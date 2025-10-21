@@ -1,0 +1,122 @@
+# RAG Pipeline Configuration
+
+# Path Configuration
+paths:
+  corpus_root: "data/corpus/scikit-learn-1.7.2-docs"
+  processed_dir: "data/processed"
+  state_dir: "data/state"
+  logs_dir: "logs"
+  vector_store_dir: "data/vector_store"
+
+# Preprocessing Settings
+preprocessing:
+  # Input directory name pattern - automatically finds directories matching:
+  # "scikit-learn-docs" (no version) or "scikit-learn-X.Y.Z-docs" (with version)
+  input_name: "scikit-learn*-docs"  # Pattern for auto-detection
+  force_reprocess: false  # Set to true to force re-pruning and re-processing
+  file_patterns:
+    - "*.html"
+  # Folders to process within the pruned corpus
+  process_folders:
+    - "api"
+    - "modules"
+    - "auto_examples"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  console_output: true
+  file_output: true
+
+# Chunking Configuration (Iteration 2)
+chunking:
+  strategies:
+    fixed:
+      enabled: true
+      chunk_size: 512  # in tokens (~384 words)
+      overlap: 50  # in tokens (~38 words)
+    semantic:
+      enabled: true
+      max_chunk_size: 1000  # in words
+      method: "sentence"  # "sentence" or "paragraph"
+    hierarchical:
+      enabled: true
+      max_chunk_size: 1000  # in words
+
+# Embedding Configuration (Iteration 2)
+embeddings:
+  model: "all-MiniLM-L6-v2"  # sentence-transformers model
+  batch_size: 32
+  device: "cpu"  # or "cuda" if GPU available
+  
+# Indexing Configuration (Iteration 2)
+indexing:
+  force_reindex: false  # Set to true to force re-indexing
+
+# Retrieval Configuration (Iteration 3)
+retrieval:
+  vector_db: "chroma"
+  top_k: 20  # Default number of results to return
+  min_similarity: 0.0  # Minimum similarity score (0-1)
+  strategy: "all"  # Default strategy: "fixed", "semantic", "hierarchical", or "all"
+  result_format: "detailed"  # "detailed" or "compact"
+  
+  # Result merging when querying multiple strategies
+  merge_strategy: "interleave"  # "interleave" or "top_scores"
+  deduplicate: true  # Remove duplicate docs across strategies
+  
+  # Hybrid search (future - optional enhancement)
+  hybrid_search:
+    enabled: false
+    sparse_weight: 0.3
+    dense_weight: 0.7
+
+# Reranking Configuration (future)
+reranking:
+  enabled: false
+  model: null
+  top_n: 5
+
+# Generation Configuration (Iteration 4)
+generation:
+  # Ollama settings
+  ollama_base_url: "http://ollama:11434"  # Ollama service in Docker Compose
+  model: "llama3.2:3b"  # Model name (llama3.2:3b, llama3.1:8b, mistral, etc.)
+  timeout: 180  # Request timeout in seconds (increased for CPU generation)
+  
+  # Generation parameters
+  temperature: 0.7  # Sampling temperature (0.0-1.0)
+  max_tokens: 256  # Maximum tokens to generate (reduced for faster generation)
+  top_p: 0.9  # Nucleus sampling parameter
+  
+  # Prompt settings
+  max_context_length: 2000  # Maximum characters for context in prompt (reduced for speed)
+  prompt_template: "default"  # "default" or "structured"
+  include_sources: true  # Include sources section in answer
+
+# Evaluation Configuration (Iteration 5)
+evaluation:
+  test_set_path: "data/evaluation/test_set.json"
+  results_dir: "data/evaluation/results"
+  
+  # Strategies to evaluate
+  strategies:
+    - "fixed"
+    - "semantic"
+    - "hierarchical"
+  
+  # Metrics configuration
+  top_k_values:
+    - 5
+    - 10
+    - 20
+  
+  # Answer quality judging
+  judge_answers: false  # Disabled: Llama 3.2 3B lacks discriminative capability for reliable judging
+  judge_criteria:
+    - "faithfulness"
+    - "relevance"
+    - "completeness"
+    - "overall"
+

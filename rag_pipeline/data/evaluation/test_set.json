@@ -1,0 +1,289 @@
+{
+  "version": "1.0",
+  "created": "2025-10-20",
+  "description": "Curated test set for RAG pipeline evaluation covering scikit-learn documentation",
+  "total_questions": 35,
+  "questions": [
+    {
+      "id": "q001",
+      "question": "What does StandardScaler do?",
+      "expected_topics": ["preprocessing", "standardization", "StandardScaler", "mean", "variance"],
+      "relevant_doc_ids": ["modules__preprocessing", "api__sklearn_preprocessing_StandardScaler"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q002",
+      "question": "What is Principal Component Analysis (PCA)?",
+      "expected_topics": ["PCA", "dimensionality reduction", "principal components", "variance"],
+      "relevant_doc_ids": ["modules__decomposition", "api__sklearn_decomposition_PCA"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q003",
+      "question": "What is cross-validation?",
+      "expected_topics": ["cross-validation", "model selection", "validation", "KFold"],
+      "relevant_doc_ids": ["modules__cross_validation", "modules__model_evaluation"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q004",
+      "question": "What is the difference between fit and transform?",
+      "expected_topics": ["fit", "transform", "fit_transform", "estimator", "transformer"],
+      "relevant_doc_ids": ["modules__preprocessing", "glossary"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q005",
+      "question": "What is GridSearchCV used for?",
+      "expected_topics": ["GridSearchCV", "hyperparameter tuning", "model selection", "cross-validation"],
+      "relevant_doc_ids": ["modules__grid_search", "api__sklearn_model_selection_GridSearchCV"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q006",
+      "question": "What are the main types of machine learning in scikit-learn?",
+      "expected_topics": ["supervised learning", "unsupervised learning", "classification", "regression", "clustering"],
+      "relevant_doc_ids": ["supervised_learning", "unsupervised_learning", "user_guide"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q007",
+      "question": "What is a Pipeline in scikit-learn?",
+      "expected_topics": ["Pipeline", "workflow", "estimator", "transformer", "chaining"],
+      "relevant_doc_ids": ["modules__compose", "api__sklearn_pipeline_Pipeline"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q008",
+      "question": "What metrics are available for classification tasks?",
+      "expected_topics": ["accuracy", "precision", "recall", "f1-score", "confusion matrix", "classification"],
+      "relevant_doc_ids": ["modules__model_evaluation", "modules__metrics"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q009",
+      "question": "What is feature scaling and why is it important?",
+      "expected_topics": ["feature scaling", "standardization", "normalization", "preprocessing"],
+      "relevant_doc_ids": ["modules__preprocessing", "common_pitfalls"],
+      "difficulty": "medium",
+      "category": "factual"
+    },
+    {
+      "id": "q010",
+      "question": "What is the purpose of train_test_split?",
+      "expected_topics": ["train_test_split", "model evaluation", "training set", "test set"],
+      "relevant_doc_ids": ["modules__cross_validation", "api__sklearn_model_selection_train_test_split"],
+      "difficulty": "easy",
+      "category": "factual"
+    },
+    {
+      "id": "q011",
+      "question": "How do I use StandardScaler to preprocess my data?",
+      "expected_topics": ["StandardScaler", "fit", "transform", "preprocessing", "example"],
+      "relevant_doc_ids": ["modules__preprocessing", "api__sklearn_preprocessing_StandardScaler"],
+      "difficulty": "easy",
+      "category": "how-to"
+    },
+    {
+      "id": "q012",
+      "question": "How do I perform cross-validation on my model?",
+      "expected_topics": ["cross_val_score", "cross-validation", "KFold", "example"],
+      "relevant_doc_ids": ["modules__cross_validation", "api__sklearn_model_selection_cross_val_score"],
+      "difficulty": "easy",
+      "category": "how-to"
+    },
+    {
+      "id": "q013",
+      "question": "How do I use GridSearchCV to tune hyperparameters?",
+      "expected_topics": ["GridSearchCV", "hyperparameter", "param_grid", "best_params", "example"],
+      "relevant_doc_ids": ["modules__grid_search", "api__sklearn_model_selection_GridSearchCV"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q014",
+      "question": "How do I handle missing values in my dataset?",
+      "expected_topics": ["missing values", "SimpleImputer", "imputation", "NaN"],
+      "relevant_doc_ids": ["modules__impute", "api__sklearn_impute_SimpleImputer"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q015",
+      "question": "How do I save and load a trained model?",
+      "expected_topics": ["model persistence", "pickle", "joblib", "save", "load"],
+      "relevant_doc_ids": ["model_persistence", "modules__model_persistence"],
+      "difficulty": "easy",
+      "category": "how-to"
+    },
+    {
+      "id": "q016",
+      "question": "How do I create a Pipeline with preprocessing and a classifier?",
+      "expected_topics": ["Pipeline", "make_pipeline", "preprocessing", "classifier", "example"],
+      "relevant_doc_ids": ["modules__compose", "api__sklearn_pipeline_Pipeline"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q017",
+      "question": "How do I apply PCA for dimensionality reduction?",
+      "expected_topics": ["PCA", "fit_transform", "n_components", "dimensionality reduction"],
+      "relevant_doc_ids": ["modules__decomposition", "api__sklearn_decomposition_PCA"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q018",
+      "question": "How do I encode categorical variables?",
+      "expected_topics": ["categorical", "OneHotEncoder", "LabelEncoder", "encoding"],
+      "relevant_doc_ids": ["modules__preprocessing", "api__sklearn_preprocessing_OneHotEncoder"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q019",
+      "question": "How do I perform feature selection?",
+      "expected_topics": ["feature selection", "SelectKBest", "RFE", "feature importance"],
+      "relevant_doc_ids": ["modules__feature_selection"],
+      "difficulty": "medium",
+      "category": "how-to"
+    },
+    {
+      "id": "q020",
+      "question": "How do I use ColumnTransformer for different preprocessing on different columns?",
+      "expected_topics": ["ColumnTransformer", "preprocessing", "heterogeneous data"],
+      "relevant_doc_ids": ["modules__compose", "api__sklearn_compose_ColumnTransformer"],
+      "difficulty": "hard",
+      "category": "how-to"
+    },
+    {
+      "id": "q021",
+      "question": "What is the difference between StandardScaler and MinMaxScaler?",
+      "expected_topics": ["StandardScaler", "MinMaxScaler", "scaling", "normalization", "standardization"],
+      "relevant_doc_ids": ["modules__preprocessing"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q022",
+      "question": "When should I use StandardScaler vs RobustScaler?",
+      "expected_topics": ["StandardScaler", "RobustScaler", "outliers", "scaling"],
+      "relevant_doc_ids": ["modules__preprocessing", "api__sklearn_preprocessing_RobustScaler"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q023",
+      "question": "What is the difference between PCA and SelectKBest?",
+      "expected_topics": ["PCA", "SelectKBest", "feature selection", "dimensionality reduction"],
+      "relevant_doc_ids": ["modules__decomposition", "modules__feature_selection"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q024",
+      "question": "GridSearchCV vs RandomizedSearchCV: which should I use?",
+      "expected_topics": ["GridSearchCV", "RandomizedSearchCV", "hyperparameter tuning", "efficiency"],
+      "relevant_doc_ids": ["modules__grid_search", "api__sklearn_model_selection_RandomizedSearchCV"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q025",
+      "question": "What is the difference between KFold and StratifiedKFold?",
+      "expected_topics": ["KFold", "StratifiedKFold", "cross-validation", "stratification"],
+      "relevant_doc_ids": ["modules__cross_validation"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q026",
+      "question": "SimpleImputer vs KNNImputer: when to use which?",
+      "expected_topics": ["SimpleImputer", "KNNImputer", "imputation", "missing values"],
+      "relevant_doc_ids": ["modules__impute"],
+      "difficulty": "medium",
+      "category": "comparison"
+    },
+    {
+      "id": "q027",
+      "question": "Should I use fit_transform or fit then transform separately?",
+      "expected_topics": ["fit_transform", "fit", "transform", "data leakage", "best practices"],
+      "relevant_doc_ids": ["modules__preprocessing", "common_pitfalls"],
+      "difficulty": "hard",
+      "category": "comparison"
+    },
+    {
+      "id": "q028",
+      "question": "Pipeline vs make_pipeline: what's the difference?",
+      "expected_topics": ["Pipeline", "make_pipeline", "naming", "convenience"],
+      "relevant_doc_ids": ["modules__compose", "api__sklearn_pipeline_make_pipeline"],
+      "difficulty": "easy",
+      "category": "comparison"
+    },
+    {
+      "id": "q029",
+      "question": "Why am I getting NaN values after using StandardScaler?",
+      "expected_topics": ["StandardScaler", "NaN", "missing values", "preprocessing", "troubleshooting"],
+      "relevant_doc_ids": ["modules__preprocessing", "common_pitfalls", "faq"],
+      "difficulty": "medium",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q030",
+      "question": "ValueError: Found input variables with inconsistent numbers of samples",
+      "expected_topics": ["ValueError", "shape mismatch", "samples", "X", "y"],
+      "relevant_doc_ids": ["common_pitfalls", "faq"],
+      "difficulty": "medium",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q031",
+      "question": "Why is my GridSearchCV taking so long to run?",
+      "expected_topics": ["GridSearchCV", "performance", "n_jobs", "cv", "optimization"],
+      "relevant_doc_ids": ["modules__grid_search", "computing"],
+      "difficulty": "medium",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q032",
+      "question": "Why do I get different results each time I run my model?",
+      "expected_topics": ["reproducibility", "random_state", "random seed"],
+      "relevant_doc_ids": ["common_pitfalls", "faq", "glossary"],
+      "difficulty": "easy",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q033",
+      "question": "How do I fix 'Data must not contain missing values' error?",
+      "expected_topics": ["missing values", "imputation", "error", "SimpleImputer"],
+      "relevant_doc_ids": ["modules__impute", "common_pitfalls"],
+      "difficulty": "easy",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q034",
+      "question": "Why is my model performing poorly on the test set?",
+      "expected_topics": ["overfitting", "underfitting", "generalization", "model evaluation"],
+      "relevant_doc_ids": ["modules__model_evaluation", "modules__learning_curve", "common_pitfalls"],
+      "difficulty": "hard",
+      "category": "troubleshooting"
+    },
+    {
+      "id": "q035",
+      "question": "Memory error when training on large dataset: how to fix?",
+      "expected_topics": ["memory", "batch processing", "incremental learning", "partial_fit"],
+      "relevant_doc_ids": ["computing", "modules__scaling_strategies"],
+      "difficulty": "hard",
+      "category": "troubleshooting"
+    }
+  ]
+}
+

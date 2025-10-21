@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments (don't copy into Docker)
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Generated data (will be created by pipeline or mounted as volumes)
+data/processed/*
+data/state/*
+data/vector_store/*
+logs/*
+
+# Keep .gitkeep files if they exist
+!**/.gitkeep
+
+# Documentation (we want these in the image)
+# *.md files should be included
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Models (will be downloaded on first run)
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+

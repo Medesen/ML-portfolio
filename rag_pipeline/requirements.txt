@@ -1,0 +1,41 @@
+# Core dependencies for RAG Pipeline
+# Python 3.9+
+
+# HTML parsing and processing
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+
+# Configuration management
+PyYAML>=6.0
+
+# Vector database and embeddings (Iteration 2)
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+torch>=2.0.0  # Required by sentence-transformers
+
+# Retrieval and search
+# rank-bm25>=0.2.2
+
+# LLM integration (Iteration 4)
+requests>=2.31.0  # For Ollama API calls
+
+# Evaluation and metrics (Iteration 5)
+numpy>=1.24.0
+scipy>=1.11.0  # For statistical tests
+matplotlib>=3.7.0  # For visualizations
+seaborn>=0.12.0  # For advanced plots
+jupyter>=1.0.0  # For analysis notebook
+pandas>=2.0.0  # For data analysis
+
+# UI (optional)
+# streamlit>=1.28.0
+
+# Testing (required for unit tests)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Development and linting (optional, in requirements-dev.txt)
+# black>=23.0.0
+# flake8>=6.0.0
+# mypy>=1.5.0
+

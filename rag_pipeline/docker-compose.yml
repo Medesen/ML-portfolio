@@ -1,0 +1,52 @@
+# docker-compose.yml
+services:
+  # Ollama LLM service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-server
+    volumes:
+      - ollama-models:/root/.ollama
+    # No port exposure needed - rag-pipeline connects via Docker network
+    # ports:
+    #   - "11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # RAG Pipeline service
+  rag-pipeline:
+    build:
+      context: .
+      args:
+        NB_USER: app
+        NB_UID: ${UID:-1000}
+        NB_GID: ${GID:-1000}
+    image: rag-pipeline:latest
+    container_name: rag-pipeline
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    volumes:
+      - ./data/processed:/app/data/processed
+      - ./data/state:/app/data/state
+      - ./data/vector_store:/app/data/vector_store
+      - ./logs:/app/logs
+      - sentence-transformers-cache:/home/app/.cache/torch/sentence_transformers
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - HF_HOME=/home/app/.cache/huggingface
+      - TORCH_HOME=/home/app/.cache/torch
+      - OLLAMA_BASE_URL=http://ollama:11434
+
+    stdin_open: true
+    tty: true
+
+volumes:
+  sentence-transformers-cache:
+  ollama-models:
