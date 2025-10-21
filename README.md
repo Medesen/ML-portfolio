@@ -6,7 +6,7 @@ A collection of machine learning projects I've built to demonstrate practical im
 
 ### 1. RAG Pipeline - Retrieval System with Systematic Evaluation
 
-**Status:** ✅ Complete  
+**Status:** Complete  
 **Domain:** Technical documentation Q&A  
 **Key Finding:** Fixed chunking achieved the highest retrieval performance (Recall@10: 0.51, MRR: 0.51)  
 **Tech Stack:** ChromaDB, sentence-transformers, Ollama (Llama 3.2), Docker
