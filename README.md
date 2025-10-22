@@ -121,6 +121,7 @@ All projects in this portfolio use Docker for reproducibility and consistent env
 - **Docker Desktop** ([Get Docker](https://docs.docker.com/get-docker/))
   - Includes Docker Compose (no separate install needed)
   - Works on Linux, macOS, and Windows
+  - **Note:** Projects require Docker Compose V2 (`docker compose` command). If you have an older installation with only V1 (`docker-compose` with hyphen), either upgrade Docker or see project-specific troubleshooting sections for workarounds.
 - **RAM:** 8GB minimum (12GB recommended)
 - **Disk Space:** ~10GB free per project
 - **Git** for cloning the repository

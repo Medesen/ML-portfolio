@@ -29,6 +29,7 @@ Based on this analysis, I recommend fixed chunking for technical documentation r
 - Docker Desktop installed ([Get Docker](https://docs.docker.com/get-docker/))
   - Includes Docker Compose (no separate install needed)
   - Works on Linux, macOS, and Windows
+  - **Note:** Requires Docker Compose V2 (`docker compose` command). If you have an older Docker installation that only supports V1 (`docker-compose` with hyphen), you'll need to either upgrade Docker or manually replace `docker compose` with `docker-compose` in the setup script.
 - CPU: 4 cores (modern x86_64; e.g., Intel i5/i7 8th gen or newer)
 - RAM: 8 GB minimum (12 GB recommended for smoother first run)
 - Disk space: ~10 GB free (2GB model + data + images)
@@ -403,6 +404,47 @@ retrieval:
 ## Troubleshooting
 
 ### Docker Issues
+
+**Setup fails with "docker compose: command not found" or "docker: 'compose' is not a docker command"**
+
+This means you have Docker Compose V1 (older version using `docker-compose` with hyphen) instead of V2 (`docker compose` without hyphen). You have two options:
+
+```bash
+# Option 1: Upgrade to Docker Compose V2 (recommended)
+# Follow instructions at: https://docs.docker.com/compose/install/
+
+# Option 2: Use V1 by editing setup.sh
+# Replace all instances of "docker compose" with "docker-compose" (add hyphen)
+sed -i 's/docker compose/docker-compose/g' setup.sh
+# Then run setup normally:
+./setup.sh
+
+# For subsequent commands, also use docker-compose instead of docker compose:
+docker-compose run --rm rag-pipeline query "How do I use StandardScaler?"
+```
+
+**Setup fails with "permission denied while trying to connect to the Docker daemon socket" (Linux only)**
+
+This is a common Linux issue where your user account doesn't have permission to access Docker. You need to add your user to the `docker` group:
+
+```bash
+# Add your user to the docker group
+sudo usermod -aG docker $USER
+
+# IMPORTANT: Log out and log back in for this to take effect
+# Or, activate the new group in your current shell:
+newgrp docker
+
+# Verify it worked (should show "docker" in the list)
+groups
+
+# Now try setup again
+./setup.sh
+```
+
+**Why this happens:** Docker on Linux uses a Unix socket (`/var/run/docker.sock`) that's only accessible by root and the `docker` group. Fresh Docker installations don't automatically add your user to this group.
+
+**Don't use sudo:** While you could run `sudo ./setup.sh` as a workaround, this will cause ownership problems with generated files (they'll be owned by root), requiring you to use sudo for all subsequent operations. This creates frustration down the road. Always fix the group membership instead.
 
 **Setup fails with "Permission denied"**
 ```bash
