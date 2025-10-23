@@ -223,3 +223,4 @@ rag_pipeline/data/processed/
 rag_pipeline/data/vector_store/
 rag_pipeline/data/state/
 rag_pipeline/logs/
+rag_pipeline/QnA_pedantic_hiring_manager_(ClaudeSonnet4.5).txt

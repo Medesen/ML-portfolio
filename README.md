@@ -2,6 +2,8 @@
 
 A collection of machine learning projects I've built to demonstrate practical implementations, systematic evaluation, and production-oriented engineering practices. Each project includes complete documentation, reproducible Docker environments, and real-world datasets.
 
+NB: This is a work in progress. Projects will be added gradually, but probably not very rapidly, as I'm writing this in my spare time.
+
 ## Current Projects
 
 ### 1. RAG Pipeline - Retrieval System with Systematic Evaluation
