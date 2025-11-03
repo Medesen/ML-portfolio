@@ -52,7 +52,7 @@ Based on this analysis, I recommend fixed chunking for technical documentation r
    - Example: Instead of `make query Q="..."`, use `docker compose run --rm rag-pipeline query "..."`
 
 3. **Use Git Bash or WSL2** (includes Make pre-installed):
-   - Use `./setup.sh` for setup
+   - Use `make setup` for setup (just like Linux/macOS)
    - All `make` commands work as shown
    - Full compatibility with all commands
 
@@ -65,7 +65,7 @@ git clone https://github.com/Medesen/ML-portfolio.git
 cd ML-portfolio/rag_pipeline
 
 # Run automated setup (builds containers, downloads model, processes data)
-./setup.sh
+make setup
 ```
 
 **For Windows:**
@@ -87,7 +87,7 @@ git clone https://github.com/Medesen/ML-portfolio.git
 cd ML-portfolio/rag_pipeline
 
 # Run automated setup (builds containers, downloads model, processes data)
-./setup.sh
+make setup
 ```
 
 **Setup process:**
@@ -413,11 +413,11 @@ This means you have Docker Compose V1 (older version using `docker-compose` with
 # Option 1: Upgrade to Docker Compose V2 (recommended)
 # Follow instructions at: https://docs.docker.com/compose/install/
 
-# Option 2: Use V1 by editing setup.sh
+# Option 2: Use V1 by editing Makefile
 # Replace all instances of "docker compose" with "docker-compose" (add hyphen)
-sed -i 's/docker compose/docker-compose/g' setup.sh
+sed -i 's/docker compose/docker-compose/g' Makefile
 # Then run setup normally:
-./setup.sh
+make setup
 
 # For subsequent commands, also use docker-compose instead of docker compose:
 docker-compose run --rm rag-pipeline query "How do I use StandardScaler?"
@@ -439,12 +439,12 @@ newgrp docker
 groups
 
 # Now try setup again
-./setup.sh
+make setup
 ```
 
 **Why this happens:** Docker on Linux uses a Unix socket (`/var/run/docker.sock`) that's only accessible by root and the `docker` group. Fresh Docker installations don't automatically add your user to this group.
 
-**Don't use sudo:** While you could run `sudo ./setup.sh` as a workaround, this will cause ownership problems with generated files (they'll be owned by root), requiring you to use sudo for all subsequent operations. This creates frustration down the road. Always fix the group membership instead.
+**Don't use sudo:** While you could run `sudo make setup` as a workaround, this will cause ownership problems with generated files (they'll be owned by root), requiring you to use sudo for all subsequent operations. This creates frustration down the road. Always fix the group membership instead.
 
 **Setup fails with "Permission denied"**
 ```bash
@@ -514,9 +514,9 @@ The Dockerfile is configured to use `UID=1000` and `GID=1000` by default (typica
 
 **Windows-specific issues**
 - Ensure Docker Desktop is using WSL2 backend
-- For `setup.sh`: Use Git Bash or WSL2
-- For `setup.ps1`: Use PowerShell
-- See [Platform-Specific Notes](#platform-specific-notes) for Make alternatives
+- For `make` commands: Use Git Bash or WSL2 (includes Make)
+- For PowerShell users: Use `setup.ps1` and [Direct Docker Commands](#direct-docker-commands-advanced)
+- See [Platform-Specific Notes](#platform-specific-notes) for details
 
 ### Application Issues
 

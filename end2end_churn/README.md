@@ -31,6 +31,7 @@ A production-ready ML service that predicts customer churn for a telecom dataset
 - Docker Desktop installed ([Get Docker](https://docs.docker.com/get-docker/))
   - Includes Docker Compose (no separate install needed)
   - Works on Linux, macOS, and Windows
+  - **Note:** Requires Docker Compose V2 (`docker compose` command). If you have an older Docker installation that only supports V1 (`docker-compose` with hyphen), you'll need to either upgrade Docker or manually replace `docker compose` with `docker-compose` in the setup script.
 - CPU: 2 cores minimum
 - RAM: 4 GB minimum
 - Disk space: ~2 GB
@@ -47,15 +48,71 @@ This project runs exclusively via Docker using `make` commands. Manual Python se
 
 Just install Docker and run `make setup`. No Python, pip, or conda needed.
 
+### Platform-Specific Notes
+
+**Linux & macOS:** All commands work as shown. GNU Make is pre-installed.
+
+**Windows:** This README uses `make` commands (e.g., `make up`, `make test`) which are NOT available by default on Windows. You have three options:
+
+1. **Install Make** (recommended for best experience):
+   ```powershell
+   choco install make
+   ```
+   After installation, all `make` commands in this README work as shown.
+
+2. **Use PowerShell script for setup, then Docker commands**:
+   - Use `.\setup.ps1` for initial setup (works out of the box, no tools needed)
+   - For all other commands, use [Direct Docker Commands](#direct-docker-commands) shown later in this README
+   - Example: Instead of `make up`, use `docker compose up -d api`
+
+3. **Use Git Bash or WSL2** (includes Make pre-installed):
+   - Use `make setup` for setup (just like Linux/macOS)
+   - All `make` commands work as shown
+   - Full compatibility with all commands
+
 ### One-Command Setup
 
+**For Linux/macOS:**
 ```bash
-# Navigate to project
-cd end2end_churn
+# Clone the repository and navigate to project
+git clone https://github.com/Medesen/ML-portfolio.git
+cd ML-portfolio/end2end_churn
 
-# Initial setup (builds image, trains model)
+# Run automated setup (builds containers, trains model)
 make setup
+```
 
+**For Windows:**
+
+Option 1 - PowerShell (Recommended):
+```powershell
+# Clone the repository and navigate to project
+git clone https://github.com/Medesen/ML-portfolio.git
+cd ML-portfolio\end2end_churn
+
+# Run automated setup (builds containers, trains model)
+.\setup.ps1
+```
+
+Option 2 - Git Bash / WSL2:
+```bash
+# Clone the repository and navigate to project
+git clone https://github.com/Medesen/ML-portfolio.git
+cd ML-portfolio/end2end_churn
+
+# Run automated setup (builds containers, trains model)
+make setup
+```
+
+**Setup process:**
+1. Builds Docker containers (~2-3 min)
+2. Trains initial model (Random Forest, ~1-2 min)
+
+### Try It Out
+
+After setup completes, you can immediately start using the service:
+
+```bash
 # Start API service
 make up
 
@@ -637,6 +694,41 @@ make clean             # Remove containers
 make clean-all         # Complete cleanup
 ```
 
+### Direct Docker Commands
+
+For Windows users without Make, or if you prefer Docker commands directly:
+
+```bash
+# Core operations (these are what the Makefile runs internally)
+docker compose build                                    # Build image
+docker compose run --rm api python train.py            # Train model
+docker compose up -d api                               # Start API
+docker compose down                                    # Stop services
+
+# Training variations
+docker compose run --rm api python train.py --config config/train_config_quick.yaml  # Quick training
+docker compose run --rm api python train.py --compare-all  # Compare all models
+
+# Testing
+docker compose run --rm api pytest tests/ -v           # Run all tests
+docker compose run --rm api pytest tests/unit/ -v      # Unit tests only
+
+# API testing (requires API to be running)
+curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" -d @test_request.json
+
+# Monitoring
+docker compose up -d api prometheus grafana  # Start with monitoring
+docker compose logs api  # View logs
+
+# MLflow UI (run in separate terminal)
+docker compose run --rm -p 5000:5000 --entrypoint mlflow api ui --backend-store-uri ./mlruns --host 0.0.0.0 --port 5000
+# Then open http://localhost:5000 in browser
+
+# Cleanup
+docker compose down  # Stop services
+docker compose down -v  # Stop and remove volumes
+```
+
 ---
 
 ## Key Technologies
@@ -895,7 +987,12 @@ F1 optimization provides a reasonable balance. For production, I'd recommend cos
 
 ### Does this work on Mac/Windows/Linux?
 
-Yes. Docker Desktop works on all three platforms. All commands use `make` which is available on Linux/Mac by default. Windows users can install Make via Chocolatey (`choco install make`) or use the direct Docker commands shown in the Makefile.
+Yes. Docker Desktop works on all three platforms:
+- **Linux:** Native Docker support + Make pre-installed
+- **macOS:** Docker Desktop includes everything needed + Make pre-installed
+- **Windows:** Docker Desktop with WSL2 backend. Make not included by default.
+
+**Windows users:** See [Platform-Specific Notes](#platform-specific-notes) at the top for three setup options. The short version: either install Make via `choco install make`, use the provided PowerShell setup script (`.\setup.ps1`), or use the [Direct Docker Commands](#direct-docker-commands) instead of `make` commands.
 
 ### How much does it cost to run?
 

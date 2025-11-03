@@ -178,7 +178,7 @@ Each project's README contains specific prerequisites and platform-specific setu
 
 ### Quick Start
 
-Each project has automated setup scripts that handle everything from building containers to downloading models and processing data. Here's the general workflow:
+Each project uses `make` commands for all operations, providing a consistent interface across projects. Here's the general workflow:
 
 ```bash
 # Clone the repository
@@ -189,10 +189,10 @@ cd ML-portfolio
 cd rag_pipeline
 
 # Run automated setup
-./setup.sh        # Linux/macOS
-.\setup.ps1       # Windows PowerShell
+make setup        # Linux/macOS/WSL2/Git Bash (requires Make)
+.\setup.ps1       # Windows PowerShell (no Make required)
 
-# The setup script will:
+# The setup process will:
 # - Build Docker containers
 # - Download required models
 # - Process datasets
