@@ -1,0 +1,17 @@
+# Grafana Dashboard Provisioning Configuration
+# Loads dashboard JSON files from specified path
+
+apiVersion: 1
+
+providers:
+  - name: 'Churn Prediction Dashboards'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+
+

@@ -1,0 +1,103 @@
+# Configuration-only pyproject.toml for tool settings
+# 
+# This project uses Docker-only execution via `make` commands.
+# Dependencies are managed in requirements.txt, not here.
+# This file consolidates tool configurations (black, isort, pytest, etc.)
+#
+# See README.md for usage instructions.
+
+[project]
+name = "churn-prediction"
+version = "1.0.0"
+description = "Production ML pipeline for customer churn prediction"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "ML Portfolio Project"}
+]
+# Note: Dependencies intentionally omitted - see requirements.txt
+# This enforces Docker-only execution workflow
+
+[tool.black]
+line-length = 100
+target-version = ['py312']
+exclude = '''
+/(
+    venv
+  | mlruns
+  | mlartifacts
+  | \.pytest_cache
+  | \.git
+  | __pycache__
+  | \.eggs
+  | \.mypy_cache
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = ["venv", "mlruns", "mlartifacts", ".pytest_cache"]
+known_first_party = ["src"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.flake8]
+# Note: flake8 doesn't officially support pyproject.toml yet
+# Configuration remains in .pre-commit-config.yaml and CI workflow
+# Documented here for reference:
+# max-line-length = 100
+# extend-ignore = E203,W503,E501
+# exclude = venv,mlruns,mlartifacts,.pytest_cache
+
+# Note: pytest and coverage configuration is in pytest.ini for explicitness
+# This keeps the configuration visible and avoids duplication
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Enable stricter type checking
+disallow_untyped_defs = true  # Require type hints on all functions
+disallow_any_generics = true  # Require specific generic types (e.g., List[str], not List)
+check_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+warn_no_return = true
+warn_unreachable = true
+show_error_codes = true
+pretty = true
+
+# Note: Some type errors in ML libraries are suppressed via overrides below
+# - Complex nested dict types from ML libraries (sklearn, mlflow)
+# - Dynamic return types from hyperparameter tuning
+# - Missing type stubs for scientific computing libraries
+
+# Exclude directories
+exclude = [
+    'venv',
+    'mlruns',
+    'mlartifacts',
+    'tests',
+    '\.pytest_cache',
+    'config',  # Config directory contains YAML files, not Python modules
+]
+
+# Per-module options for third-party libraries without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "sklearn.*",
+    "xgboost.*",
+    "matplotlib.*",
+    "seaborn.*",
+    "arff.*",
+    "pandera.*",
+    "mlflow.*",
+    "prometheus_client.*",
+    "slowapi.*",
+    "joblib.*",
+    "uvicorn.*",
+]
+ignore_missing_imports = true
+

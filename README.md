@@ -26,6 +26,28 @@ A retrieval-augmented generation system I built to compare chunking strategies f
 
 ---
 
+### 2. Customer Churn Prediction - Production ML Pipeline
+
+**Status:** Complete  
+**Domain:** Telecom customer churn prediction  
+**Best Performance:** ROC AUC 0.836 (validation set)  
+**Tech Stack:** FastAPI, MLflow, Prometheus/Grafana, Docker, Kubernetes
+
+A production-ready ML service I built to predict customer churn with complete end-to-end engineering. The project demonstrates training with hyperparameter tuning, REST API serving, drift detection, experiment tracking, monitoring dashboards, comprehensive testing, and CI/CD pipeline. Everything runs via Docker with zero local setup required.
+
+**Highlights:**
+- Complete ML service (training → API → monitoring → deployment)
+- Three algorithms with automated hyperparameter tuning
+- MLflow experiment tracking and model registry
+- Drift detection with automatic retraining triggers
+- 175+ tests with 89% coverage, full CI/CD pipeline
+- Kubernetes deployment manifests with auto-scaling
+- ~5 minute setup time, fully reproducible
+
+**[View Project →](end2end_churn/)**
+
+---
+
 ## What This Portfolio Demonstrates
 
 ### Engineering Practices
@@ -38,13 +60,17 @@ A retrieval-augmented generation system I built to compare chunking strategies f
 
 ### Technical Skills
 
-**ML/AI:** Retrieval-augmented generation, embedding models, vector databases, LLM integration, evaluation frameworks
+**ML/AI:** Retrieval-augmented generation, classification models (Random Forest, XGBoost, Logistic Regression), embedding models, vector databases, LLM integration, hyperparameter tuning, threshold optimization, drift detection, evaluation frameworks
 
-**Software Engineering:** Modular architecture, dependency injection, configuration management, state tracking, logging, type hints, unit testing
+**Software Engineering:** REST APIs (FastAPI), modular architecture, dependency injection, configuration management, state tracking, logging, type hints, comprehensive testing (unit/integration/e2e)
+
+**MLOps:** MLflow experiment tracking, model registry, CI/CD pipelines (GitHub Actions), security scanning, load testing, Kubernetes deployment
+
+**Monitoring:** Prometheus metrics, Grafana dashboards, request tracing, SLO tracking
 
 **DevOps:** Docker & Docker Compose, automated deployment, multi-service orchestration, cross-platform compatibility (Linux/macOS/Windows)
 
-**Data Engineering:** HTML parsing, chunking strategies, data preprocessing pipelines, batch processing
+**Data Engineering:** HTML parsing, chunking strategies, data preprocessing pipelines, batch processing, feature engineering
 
 ---
 
@@ -54,7 +80,7 @@ A retrieval-augmented generation system I built to compare chunking strategies f
 ML-portfolio/
 ├── README.md                    # Portfolio overview (this file)
 ├── rag_pipeline/                # Project 1: RAG system with evaluation
-│   ├── README.md               # Complete documentation (633 lines)
+│   ├── README.md               # Complete documentation
 │   ├── ARCHITECTURE.md         # System design patterns
 │   ├── DESIGN.md               # Design decisions & trade-offs
 │   ├── CHANGELOG.md            # Development iterations (1-5)
@@ -75,14 +101,31 @@ ML-portfolio/
 │   ├── docker-compose.yml      # Multi-service orchestration
 │   ├── Makefile               # 20+ command shortcuts
 │   └── setup.sh / setup.ps1   # Automated setup scripts
+├── end2end_churn/              # Project 2: Production ML pipeline
+│   ├── README.md               # Complete documentation
+│   ├── src/                    # Source code
+│   │   ├── api/               # FastAPI service
+│   │   ├── data/              # Data loading & preprocessing
+│   │   ├── models/            # Model pipelines & factory
+│   │   ├── training/          # Training & tuning
+│   │   ├── evaluation/        # Metrics & visualizations
+│   │   └── utils/             # Logging, I/O, metrics, drift
+│   ├── tests/                  # 175+ tests (89% coverage)
+│   ├── k8s/                   # Kubernetes manifests
+│   ├── grafana/               # Grafana dashboards
+│   ├── config/                # Training configurations
+│   ├── data/                  # Training data
+│   ├── Dockerfile             # Container definition
+│   ├── docker-compose.yml     # Orchestration (API, MLflow, monitoring)
+│   └── Makefile              # 40+ command shortcuts
 └── [future projects...]        # More projects coming soon
 ```
 
 Each project is self-contained with its own:
 - Detailed README with quick-start guide and examples
-- Architecture and design documentation
+- Architecture and design documentation (where applicable)
 - YAML-based configuration
-- Unit test suite with pytest
+- Comprehensive test suite with pytest
 - Docker environment with automated setup
 - Complete dataset (where feasible and permitted by licensing)
 
@@ -99,7 +142,6 @@ This portfolio is actively expanding. Planned additions include:
 - **Classic NLP baselines** - TF-IDF, BiLSTM-CRF vs Transformers comparison
 
 **Classic ML:**
-- **End-to-end ML service** - Problem → model → API → CI/CD → monitoring
 - **Tabular ML** - Feature engineering, experiment tracking, SHAP, model cards
 - **Causal inference** - A/B testing, CUPED, uplift modeling
 - **Time-series forecasting** - ARIMA/Prophet vs XGBoost vs deep learning
@@ -201,28 +243,44 @@ I focus on projects that demonstrate:
 
 ## Technologies Used So Far
 
-Based on the completed RAG pipeline project, I've demonstrated proficiency with:
+Based on the completed projects, I've demonstrated proficiency with:
 
 **ML/AI Frameworks:**
+- scikit-learn (Random Forest, Logistic Regression)
+- XGBoost (gradient boosting)
 - Sentence-transformers (embedding models)
 - ChromaDB (vector database)
 - Ollama (local LLM inference)
 - PyTorch (underlying framework)
 
 **Python Ecosystem:**
-- Type hints and modern Python 3.12 features
-- pytest for unit testing
+- FastAPI (REST API development)
+- Pydantic (data validation)
+- Type hints and modern Python features
+- pytest for comprehensive testing (unit/integration/e2e)
 - YAML-based configuration management
 - Structured logging
 
+**MLOps & Monitoring:**
+- MLflow (experiment tracking, model registry)
+- Prometheus (metrics collection)
+- Grafana (dashboards and visualization)
+- slowapi (rate limiting)
+
 **Development Tools:**
 - Docker & Docker Compose for containerization
+- Kubernetes (deployment manifests, auto-scaling)
+- GitHub Actions (CI/CD pipelines)
+- Trivy (security scanning)
+- Locust (load testing)
 - Git version control
 - Make for task automation
 - Cross-platform compatibility (Linux/macOS/Windows)
 
 **Evaluation & Metrics:**
+- Classification metrics (ROC AUC, precision, recall, F1)
 - Information Retrieval metrics (Recall@k, MRR, NDCG)
+- Drift detection (PSI, distribution monitoring)
 - Systematic comparative evaluation
 - Test set design and curation
 
@@ -245,7 +303,7 @@ I built these projects to demonstrate end-to-end capability - from problem defin
 
 ---
 
-**Last Updated:** October 2025  
-**Current Projects:** 1 complete, more coming soon  
+**Last Updated:** November 2025  
+**Current Projects:** 2 complete, more coming soon  
 **License:** See individual project directories for license details
 

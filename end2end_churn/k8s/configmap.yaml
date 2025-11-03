@@ -1,0 +1,65 @@
+# Kubernetes ConfigMap for Churn Prediction API
+#
+# ConfigMaps store non-sensitive configuration as key-value pairs.
+# Benefits:
+# - Decouple configuration from container images
+# - Update config without rebuilding images
+# - Share config across multiple pods
+#
+# For sensitive data (passwords, tokens), use Secrets instead.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: churn-config
+  labels:
+    app: churn-api
+
+data:
+  # Logging configuration
+  LOG_LEVEL: "INFO"  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  
+  # API configuration
+  MAX_BATCH_SIZE: "1000"           # Maximum customers per prediction request
+  MAX_REQUEST_SIZE_MB: "10"        # Maximum request size in megabytes
+  
+  # Drift detection thresholds
+  DRIFT_THRESHOLD_NUMERIC: "0.2"       # 20% change triggers drift (numeric features)
+  DRIFT_THRESHOLD_CATEGORICAL: "0.25"  # PSI > 0.25 triggers drift (categorical)
+  DRIFT_THRESHOLD_PREDICTION: "0.1"    # 10% change in prediction rate
+  MAX_DRIFT_BATCH_SIZE: "500"          # Maximum batch size for drift analysis
+  
+  # Automatic retraining
+  AUTO_RETRAIN_ON_DRIFT: "false"       # Enable automatic retraining
+  MIN_RETRAIN_INTERVAL_HOURS: "24"    # Minimum hours between retrains
+  
+  # Model registry (MLflow)
+  MODEL_SOURCE: "local"                # Options: local, registry
+  MODEL_STAGE: "Production"            # MLflow stage: Staging, Production
+  MODEL_NAME: "churn_prediction_model"
+  
+  # Rate limiting
+  RATE_LIMIT_ENABLED: "true"           # Enable/disable rate limiting
+  RATE_LIMIT_PREDICT: "100/minute"     # Requests per minute for /predict
+  RATE_LIMIT_DRIFT: "20/minute"        # Requests per minute for /drift
+
+# Note: For sensitive data, use a Secret instead:
+# ---
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: churn-secrets
+# type: Opaque
+# stringData:
+#   SERVICE_TOKEN: "your-secret-token-here"
+# 
+# Then reference in deployment:
+# env:
+# - name: SERVICE_TOKEN
+#   valueFrom:
+#     secretKeyRef:
+#       name: churn-secrets
+#       key: SERVICE_TOKEN
+
+
+

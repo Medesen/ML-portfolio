@@ -1,0 +1,34 @@
+# Default Training Configuration
+# This is the standard configuration for training the churn prediction model.
+# It balances thorough hyperparameter search with reasonable training time.
+
+data:
+  data_path: "data/dataset.arff"
+  random_state: 42
+  test_size: 0.2        # 20% held out for final testing
+  val_size: 0.25        # 25% of remaining (train+val) for validation
+  stratify: true        # Maintain class distribution in splits
+
+model:
+  model_type: "random_forest"                # Model type: random_forest, xgboost, or logistic_regression
+  n_estimators_grid: [100, 200, 300]        # Number of trees
+  max_depth_grid: [10, 20, null]            # Maximum tree depth (null = unlimited)
+  min_samples_split_grid: [2, 5, 10]        # Minimum samples to split node
+  min_samples_leaf_grid: [1, 2, 4]          # Minimum samples per leaf
+  cv_folds: 5                                # 5-fold cross-validation
+  scoring: "roc_auc"                         # Optimize for ROC AUC
+  n_jobs: -1                                 # Use all CPU cores
+
+mlflow:
+  tracking_uri: "./mlruns"                   # Local MLflow tracking
+  experiment_name: "churn_prediction"
+  log_models: true                           # Log trained models
+  log_artifacts: true                        # Log plots, metadata, etc.
+
+drift:
+  numeric_threshold: 0.2                     # KS statistic threshold
+  categorical_threshold: 0.25                # PSI threshold for categorical features
+  prediction_threshold: 0.1                  # PSI threshold for predictions
+  min_sample_size: 100                       # Minimum samples for drift detection
+  max_drift_batch_size: 1000                 # Maximum batch size for drift analysis
+

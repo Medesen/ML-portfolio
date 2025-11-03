@@ -1,0 +1,48 @@
+# Customer Churn Prediction - Python Dependencies
+# Pinned versions for reproducibility
+
+# Core ML libraries
+numpy==1.26.4
+pandas==2.2.3
+scikit-learn==1.5.2
+xgboost==2.1.3
+scipy==1.14.1  # Statistical tests for drift detection
+
+# Data loading
+liac-arff==2.5.0
+
+# Visualization
+matplotlib==3.9.2
+seaborn==0.13.2
+
+# Model persistence
+joblib==1.4.2
+
+# API framework
+fastapi==0.115.4
+uvicorn==0.32.1
+pydantic==2.10.3
+slowapi==0.1.9  # Rate limiting
+
+# Data validation
+pandera==0.20.4
+
+# Monitoring and metrics
+prometheus-client==0.21.0
+
+# Experiment tracking
+mlflow==2.16.2  # Updated for Python 3.12 compatibility
+setuptools>=65.5.0  # Required by mlflow for pkg_resources
+
+# Configuration management
+pyyaml==6.0.2
+
+# Testing framework
+pytest==8.3.4
+pytest-cov==6.0.0  # Code coverage reporting
+pytest-xdist==3.6.1  # Parallel test execution
+httpx==0.28.1  # Required for TestClient (FastAPI testing)
+
+# Load testing
+locust==2.32.3  # Performance and SLO validation testing
+

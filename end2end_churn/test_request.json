@@ -1,0 +1,22 @@
+{
+  "gender": "Female",
+  "SeniorCitizen": 0,
+  "Partner": "Yes",
+  "Dependents": "No",
+  "tenure": 12,
+  "Contract": "Month-to-month",
+  "PaperlessBilling": "Yes",
+  "PaymentMethod": "Electronic check",
+  "MonthlyCharges": 70.35,
+  "TotalCharges": 844.20,
+  "PhoneService": "Yes",
+  "MultipleLines": "No",
+  "InternetService": "Fiber optic",
+  "OnlineSecurity": "No",
+  "OnlineBackup": "Yes",
+  "DeviceProtection": "No",
+  "TechSupport": "No",
+  "StreamingTV": "Yes",
+  "StreamingMovies": "No"
+}
+

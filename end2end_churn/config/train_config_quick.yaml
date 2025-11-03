@@ -1,0 +1,34 @@
+# Quick Training Configuration
+# This configuration is optimized for fast experimentation and development.
+# It uses minimal hyperparameter search for quick iteration cycles.
+
+data:
+  data_path: "data/dataset.arff"
+  random_state: 42
+  test_size: 0.2
+  val_size: 0.25
+  stratify: true
+
+model:
+  model_type: "random_forest"        # Model type: random_forest, xgboost, or logistic_regression
+  n_estimators_grid: [100]           # Single value = no grid search
+  max_depth_grid: [10]               # Single value = no grid search
+  min_samples_split_grid: [2]        # Single value = no grid search
+  min_samples_leaf_grid: [1]         # Single value = no grid search
+  cv_folds: 3                        # Fewer folds for speed
+  scoring: "roc_auc"
+  n_jobs: -1
+
+mlflow:
+  tracking_uri: "./mlruns"
+  experiment_name: "churn_prediction_quick"
+  log_models: true
+  log_artifacts: false               # Skip artifact logging for speed
+
+drift:
+  numeric_threshold: 0.2
+  categorical_threshold: 0.25
+  prediction_threshold: 0.1
+  min_sample_size: 50                # Lower threshold for quick tests
+  max_drift_batch_size: 1000
+

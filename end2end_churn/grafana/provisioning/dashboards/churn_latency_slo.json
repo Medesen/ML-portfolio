@@ -1,0 +1,177 @@
+{
+  "dashboard": {
+    "title": "Churn API - Latency & SLO Monitoring",
+    "tags": ["churn", "latency", "slo", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "Request Latency Percentiles (p50, p95, p99)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(churn_prediction_request_duration_seconds_bucket{endpoint=\"/predict\"}[5m]))",
+            "legendFormat": "p50 (median)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(churn_prediction_request_duration_seconds_bucket{endpoint=\"/predict\"}[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(churn_prediction_request_duration_seconds_bucket{endpoint=\"/predict\"}[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Latency"
+          }
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "values": true,
+          "current": true,
+          "avg": true
+        },
+        "thresholds": [
+          {
+            "value": 0.05,
+            "colorMode": "custom",
+            "line": true,
+            "lineColor": "rgb(31, 120, 193)",
+            "op": "gt",
+            "fill": false,
+            "yaxis": "left"
+          },
+          {
+            "value": 0.2,
+            "colorMode": "custom",
+            "line": true,
+            "lineColor": "rgb(255, 152, 48)",
+            "op": "gt",
+            "fill": false,
+            "yaxis": "left"
+          },
+          {
+            "value": 0.5,
+            "colorMode": "custom",
+            "line": true,
+            "lineColor": "rgb(245, 54, 54)",
+            "op": "gt",
+            "fill": false,
+            "yaxis": "left"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "Model Inference Latency (p50, p95, p99)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(churn_model_prediction_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50 (median)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(churn_model_prediction_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(churn_model_prediction_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Inference Time"
+          }
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "type": "graph",
+        "title": "Preprocessing Latency",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(churn_preprocessing_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(churn_preprocessing_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Time"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "type": "singlestat",
+        "title": "SLO Compliance - p95 < 200ms",
+        "targets": [
+          {
+            "expr": "(histogram_quantile(0.95, rate(churn_prediction_request_duration_seconds_bucket{endpoint=\"/predict\"}[5m])) < 0.2) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "valueName": "current",
+        "valueFontSize": "80%",
+        "thresholds": "80,95",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"]
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "type": "graph",
+        "title": "Request Rate & Error Rate",
+        "targets": [
+          {
+            "expr": "rate(churn_prediction_requests_total{endpoint=\"/predict\",status=\"success\"}[5m])",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(churn_prediction_requests_total{endpoint=\"/predict\",status=\"error\"}[5m])",
+            "legendFormat": "Error Rate",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "reqps",
+            "label": "Requests/sec"
+          }
+        ]
+      }
+    ],
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s"
+  }
+}
+

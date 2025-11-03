@@ -1,0 +1,63 @@
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments (don't copy into container)
+venv/
+env/
+ENV/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Data directories (will be mounted as volumes instead)
+data/
+diagnostics/
+logs/
+models/
+
+# Documentation (not needed in container)
+*.md
+README.md
+PROJECT_PLAN.md
+DESIGN.md
+
+# Test files and configs (tests/ and pytest.ini needed for Docker testing)
+# tests/  # REMOVED: We need tests in Docker for CI/CD
+*_test.py
+# pytest.ini  # REMOVED: Needed for pytest configuration
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Setup scripts (used locally, not in container)
+setup.sh
+setup.ps1
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Docker files (don't need these inside the image)
+.dockerignore
+docker-compose.yml
+

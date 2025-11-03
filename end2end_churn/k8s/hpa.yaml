@@ -1,0 +1,92 @@
+# Horizontal Pod Autoscaler for Churn Prediction API
+#
+# HPA automatically scales the number of pods based on observed metrics.
+# Benefits:
+# - Handle traffic spikes without manual intervention
+# - Save costs by scaling down during low traffic
+# - Maintain performance under load
+#
+# How it works:
+# 1. HPA queries metrics every 15 seconds (default)
+# 2. If metrics exceed targets, scales up (adds pods)
+# 3. If metrics are low, scales down (removes pods)
+# 4. Respects min/max replica bounds
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: churn-api-hpa
+  labels:
+    app: churn-api
+
+spec:
+  # Target deployment to scale
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: churn-prediction-api
+  
+  # Replica bounds
+  minReplicas: 3   # Always run at least 3 pods for HA
+  maxReplicas: 10  # Never exceed 10 pods (cost control)
+  
+  # Scaling metrics
+  # HPA scales when ANY metric exceeds its target
+  metrics:
+  
+  # CPU-based scaling
+  # Scales if average CPU across all pods > 70%
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Target 70% CPU utilization
+  
+  # Memory-based scaling
+  # Scales if average memory across all pods > 80%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Target 80% memory utilization
+  
+  # Scaling behavior (optional, for fine-tuning)
+  # Controls how fast HPA scales up/down
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately (no delay)
+      policies:
+      - type: Percent
+        value: 50        # Increase by 50% of current replicas
+        periodSeconds: 60  # Every 60 seconds
+      - type: Pods
+        value: 2         # Or add 2 pods
+        periodSeconds: 60
+      selectPolicy: Max  # Use the policy that adds more pods
+    
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50        # Decrease by 50% of current replicas
+        periodSeconds: 60
+      - type: Pods
+        value: 1         # Or remove 1 pod
+        periodSeconds: 60
+      selectPolicy: Min  # Use the policy that removes fewer pods
+
+# Prerequisites:
+# - metrics-server must be installed in the cluster
+# - Pods must have resource requests defined (for percentage calculations)
+#
+# Install metrics-server (if not present):
+# kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# Verify HPA status:
+# kubectl get hpa churn-api-hpa
+# kubectl describe hpa churn-api-hpa
+
+
+

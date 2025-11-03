@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # Main API service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NB_USER=appuser
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
+    image: churn-service:latest
+    container_name: churn-api
+    
+    ports:
+      - "8000:8000"
+    
+    volumes:
+      - ./data:/app/data:ro              # Read-only: Training data
+      - ./models:/app/models             # Read-write: Model files
+      - ./diagnostics:/app/diagnostics   # Read-write: Diagnostics
+      - ./logs:/app/logs                 # Read-write: Application logs
+      - ./mlruns:/app/mlruns             # Read-write: MLflow tracking data
+    
+    # Docker secrets for secure secret management
+    secrets:
+      - service_token
+    
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MODEL_PATH=/app/models/churn_model_latest.joblib
+      # Input validation and security
+      - MAX_BATCH_SIZE=${MAX_BATCH_SIZE:-1000}
+      - MAX_REQUEST_SIZE_MB=${MAX_REQUEST_SIZE_MB:-10}
+      # Use SERVICE_TOKEN_FILE for Docker secrets
+      # Falls back to SERVICE_TOKEN env var for development
+      - SERVICE_TOKEN_FILE=/run/secrets/service_token
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-}
+      # Drift detection
+      - MAX_DRIFT_BATCH_SIZE=${MAX_DRIFT_BATCH_SIZE:-500}
+      - DRIFT_THRESHOLD_NUMERIC=${DRIFT_THRESHOLD_NUMERIC:-0.2}
+      - DRIFT_THRESHOLD_CATEGORICAL=${DRIFT_THRESHOLD_CATEGORICAL:-0.25}
+      - DRIFT_THRESHOLD_PREDICTION=${DRIFT_THRESHOLD_PREDICTION:-0.1}
+      - AUTO_RETRAIN_ON_DRIFT=${AUTO_RETRAIN_ON_DRIFT:-false}
+      - MIN_RETRAIN_INTERVAL_HOURS=${MIN_RETRAIN_INTERVAL_HOURS:-24}
+      # Model registry
+      - MODEL_SOURCE=${MODEL_SOURCE:-local}
+      - MODEL_STAGE=${MODEL_STAGE:-Production}
+      - MODEL_NAME=${MODEL_NAME:-churn_prediction_model}
+      # Rate limiting
+      - RATE_LIMIT_ENABLED=${RATE_LIMIT_ENABLED:-true}
+      - RATE_LIMIT_PREDICT=${RATE_LIMIT_PREDICT:-100/minute}
+      - RATE_LIMIT_DRIFT=${RATE_LIMIT_DRIFT:-20/minute}
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - churn-network
+    
+    # Resource limits (uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1.0'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 1G
+
+  # Prometheus (optional monitoring)
+  # Start with: docker compose --profile monitoring up -d
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: churn-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - churn-network
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles:
+      - monitoring
+
+  # Grafana (optional visualization)
+  # Start with: docker compose --profile monitoring up -d
+  grafana:
+    image: grafana/grafana:latest
+    container_name: churn-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    restart: unless-stopped
+    networks:
+      - churn-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+# Named volumes for persistent data
+volumes:
+  prometheus-data:
+    name: churn-prometheus-data
+  grafana-data:
+    name: churn-grafana-data
+
+# Network for service discovery
+networks:
+  churn-network:
+    name: churn-network
+    driver: bridge
+
+# Docker secrets for secure credential management
+# Create secrets/service_token.txt file for local development
+# In production, use external secrets management
+secrets:
+  service_token:
+    file: ./secrets/service_token.txt
+

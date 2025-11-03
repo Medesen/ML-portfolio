@@ -1,0 +1,456 @@
+name: CI - End2End Churn Prediction
+
+# Run on pushes to main and PRs targeting main
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'end2end_churn/**'
+      - '.github/workflows/ci-end2end-churn.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'end2end_churn/**'
+      - '.github/workflows/ci-end2end-churn.yml'
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  # =============================================================================
+  # Job 1: Linting and Code Quality
+  # =============================================================================
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install flake8 black isort mypy
+          pip install pandas-stubs types-PyYAML types-requests
+      
+      - name: Run flake8 (linting)
+        run: |
+          # Check for syntax errors and undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=venv,mlruns,mlartifacts
+          # Check for complexity and style (allow longer lines for ML code)
+          flake8 . --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics --exclude=venv,mlruns,mlartifacts
+      
+      - name: Check code formatting with black
+        run: |
+          black --check --diff . || echo "Code formatting issues found (non-blocking)"
+      
+      - name: Check import order with isort
+        run: |
+          isort --check-only --diff . || echo "Import order issues found (non-blocking)"
+      
+      - name: Type check with mypy (strict mode - Issue 3)
+        run: |
+          mypy src/ serve.py train.py --config-file pyproject.toml || echo "Type checking issues found (non-blocking due to ML library limitations)"
+
+  # =============================================================================
+  # Job 2: Unit Tests
+  # =============================================================================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run unit tests
+        run: |
+          pytest -v -m unit --cov=src --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./end2end_churn/coverage.xml
+          flags: unittests
+          name: unit-tests
+          fail_ci_if_error: false
+
+  # =============================================================================
+  # Job 3: Integration Tests (API)
+  # =============================================================================
+  integration-tests:
+    name: Integration Tests (API)
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Train a quick model (for API tests)
+        run: |
+          python train.py --config config/train_config_quick.yaml
+        timeout-minutes: 10
+      
+      - name: Run integration tests
+        run: |
+          pytest -v -m integration --cov=src --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./end2end_churn/coverage.xml
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+
+  # =============================================================================
+  # Job 4: End-to-End Tests
+  # =============================================================================
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run e2e tests
+        run: |
+          pytest -v -m e2e --cov-report=term
+        timeout-minutes: 15
+      
+      - name: Archive test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            end2end_churn/models/
+            end2end_churn/diagnostics/
+            end2end_churn/logs/
+          retention-days: 7
+
+  # =============================================================================
+  # Job 5: Docker Build & Test
+  # =============================================================================
+  docker-test:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        run: |
+          docker compose build
+      
+      - name: Train model in Docker
+        run: |
+          docker compose run --rm --entrypoint python api train.py --config config/train_config_quick.yaml
+        timeout-minutes: 10
+      
+      - name: Start API service
+        run: |
+          docker compose up -d
+          # Wait for service to be ready
+          timeout 60 bash -c 'until curl -f http://localhost:8000/healthz; do sleep 2; done'
+      
+      - name: Test API health
+        run: |
+          curl -f http://localhost:8000/health || exit 1
+      
+      - name: Test prediction endpoint
+        run: |
+          curl -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d @test_request.json \
+            -f || exit 1
+      
+      - name: Run pytest in Docker
+        run: |
+          docker compose run --rm --entrypoint pytest api -v -m "not slow"
+      
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose logs
+      
+      - name: Stop services
+        if: always()
+        run: |
+          docker compose down -v
+
+  # =============================================================================
+  # Job 6: Container Security Scanning (Issue 7)
+  # =============================================================================
+  security-scan:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    needs: docker-test
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image for scanning
+        run: |
+          docker compose build api
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'churn-service:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail build on vulnerabilities (report only)
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'container-security'
+      
+      - name: Run Trivy in table format (for logs)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'churn-service:latest'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+      
+      - name: Scan for secrets in image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image --scanners secret churn-service:latest || true
+      
+      - name: Check Python dependencies for known vulnerabilities
+        run: |
+          docker run --rm churn-service:latest pip list --format=json > pip-packages.json || true
+          # Trivy can also scan pip packages
+          docker run --rm -v $PWD:/scan aquasec/trivy fs --scanners vuln /scan/requirements.txt || true
+
+  # =============================================================================
+  # Job 7: Load Testing & Performance Validation (Issue 8)
+  # =============================================================================
+  load-test:
+    name: Load Testing & SLO Validation
+    runs-on: ubuntu-latest
+    needs: docker-test
+    defaults:
+      run:
+        working-directory: end2end_churn
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      
+      - name: Install Locust
+        run: |
+          pip install --upgrade pip
+          pip install locust==2.32.3
+      
+      - name: Build and start services
+        run: |
+          docker compose build api
+          docker compose up -d
+          
+          # Wait for service to be ready (up to 60 seconds)
+          echo "Waiting for service to be ready..."
+          timeout 60 bash -c 'until curl -f http://localhost:8000/healthz; do sleep 2; done'
+          echo "✓ Service is ready"
+      
+      - name: Run load test (50 users, 60 seconds)
+        run: |
+          cd tests
+          locust -f locustfile.py \
+            --headless \
+            --users 50 \
+            --spawn-rate 10 \
+            --run-time 60s \
+            --host http://localhost:8000 \
+            --html locust_report.html \
+            --csv locust_results
+        timeout-minutes: 3
+      
+      - name: Validate SLO compliance
+        run: |
+          cd tests
+          
+          # Check if CSV exists
+          if [ ! -f locust_results_stats.csv ]; then
+            echo "❌ Load test results not found"
+            exit 1
+          fi
+          
+          # Parse results and validate SLOs
+          python3 << 'EOF'
+          import pandas as pd
+          import sys
+          
+          # Load results
+          df = pd.read_csv('locust_results_stats.csv')
+          
+          # Get /predict stats
+          predict_row = df[df['Name'] == '/predict']
+          
+          if predict_row.empty:
+              print("❌ No /predict requests in load test")
+              sys.exit(1)
+          
+          # Extract metrics
+          p95 = predict_row['95%'].values[0]
+          p99 = predict_row['99%'].values[0]
+          failure_rate = (predict_row['# failures'].values[0] / predict_row['# requests'].values[0]) * 100
+          
+          print(f"\n📊 Load Test Results:")
+          print(f"   p95 latency: {p95}ms")
+          print(f"   p99 latency: {p99}ms")
+          print(f"   Failure rate: {failure_rate:.2f}%")
+          
+          # Validate SLOs (lenient for CI environment)
+          p95_pass = p95 < 500  # 500ms for CI (production: 200ms)
+          p99_pass = p99 < 1000  # 1s for CI (production: 500ms)
+          error_pass = failure_rate < 1.0  # 1% for CI (production: 0.1%)
+          
+          print(f"\n📋 SLO Validation:")
+          print(f"   {'✅' if p95_pass else '❌'} p95 < 500ms: {'PASS' if p95_pass else 'FAIL'}")
+          print(f"   {'✅' if p99_pass else '❌'} p99 < 1000ms: {'PASS' if p99_pass else 'FAIL'}")
+          print(f"   {'✅' if error_pass else '❌'} Error rate < 1%: {'PASS' if error_pass else 'FAIL'}")
+          
+          if not (p95_pass and p99_pass and error_pass):
+              print("\n❌ SLO validation failed")
+              sys.exit(1)
+          
+          print("\n✅ All SLOs met!")
+          EOF
+      
+      - name: Upload load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report
+          path: |
+            end2end_churn/tests/locust_report.html
+            end2end_churn/tests/locust_results*.csv
+          retention-days: 7
+      
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose logs api
+      
+      - name: Stop services
+        if: always()
+        run: |
+          docker compose down -v
+
+  # =============================================================================
+  # Job 8: Test Summary
+  # =============================================================================
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests, docker-test, security-scan, load-test]
+    if: always()
+    
+    steps:
+      - name: Check test results
+        run: |
+          echo "Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "E2E Tests: ${{ needs.e2e-tests.result }}"
+          echo "Docker Tests: ${{ needs.docker-test.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "Load Test: ${{ needs.load-test.result }}"
+          
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.integration-tests.result }}" != "success" ] || \
+             [ "${{ needs.e2e-tests.result }}" != "success" ] || \
+             [ "${{ needs.docker-test.result }}" != "success" ]; then
+            echo "❌ One or more test jobs failed"
+            exit 1
+          elif [ "${{ needs.load-test.result }}" != "success" ]; then
+            echo "❌ Load test failed - SLO violations detected"
+            exit 1
+          elif [ "${{ needs.security-scan.result }}" != "success" ]; then
+            echo "⚠️  Security scan had issues (non-blocking)"
+            echo "✅ All functional tests passed!"
+          else
+            echo "✅ All tests, load tests, and security scan passed!"
+          fi
+

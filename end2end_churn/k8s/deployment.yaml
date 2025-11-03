@@ -1,0 +1,216 @@
+# Kubernetes Deployment for Churn Prediction API
+#
+# A Deployment manages a set of identical pods, ensuring the desired number
+# of replicas are always running. It handles rolling updates, rollbacks, and
+# self-healing (recreates pods if they fail).
+#
+# Key concepts demonstrated:
+# - Replica management for high availability
+# - Resource requests and limits
+# - Health checks (liveness and readiness probes)
+# - Configuration via ConfigMap
+# - Volume mounts for persistent data
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-prediction-api
+  labels:
+    app: churn-api
+    version: v1
+  annotations:
+    description: "ML API for customer churn prediction"
+    maintainer: "ml-team@example.com"
+
+spec:
+  # Number of pod replicas to run
+  # 3 replicas provide high availability: if one fails, traffic routes to others
+  replicas: 3
+  
+  # Selector defines which pods this Deployment manages
+  # Must match the labels in the pod template below
+  selector:
+    matchLabels:
+      app: churn-api
+  
+  # Rolling update strategy
+  # Controls how pods are replaced during updates
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Maximum number of extra pods during update (33% above replicas)
+      maxUnavailable: 1  # Maximum number of pods that can be unavailable during update
+  
+  # Pod template: defines the pods that will be created
+  template:
+    metadata:
+      labels:
+        app: churn-api
+        version: v1
+      annotations:
+        # Prometheus scraping configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    
+    spec:
+      # Containers in the pod
+      containers:
+      - name: api
+        image: churn-service:latest  # TODO: Replace with your registry/image:tag
+        imagePullPolicy: IfNotPresent  # Change to Always for production with :latest tag
+        
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        
+        # Resource management
+        # Requests: Minimum guaranteed resources (used for scheduling)
+        # Limits: Maximum resources the container can use
+        resources:
+          requests:
+            memory: "512Mi"   # 512 megabytes minimum
+            cpu: "250m"       # 0.25 CPU cores (250 millicores)
+          limits:
+            memory: "2Gi"     # 2 gigabytes maximum
+            cpu: "1000m"      # 1 CPU core maximum
+        
+        # Health checks
+        # Kubernetes uses these to determine pod health and readiness
+        
+        # Liveness probe: Is the application running?
+        # If this fails, Kubernetes restarts the container
+        # Use case: Detect deadlocks, hung processes
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 30  # Wait 30s after startup before first check
+          periodSeconds: 10        # Check every 10 seconds
+          timeoutSeconds: 5        # Fail if no response within 5s
+          successThreshold: 1      # Consider healthy after 1 success
+          failureThreshold: 3      # Restart after 3 consecutive failures
+        
+        # Readiness probe: Is the application ready to serve traffic?
+        # If this fails, Kubernetes removes the pod from the Service
+        # Use case: Model loading, dependency checks
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 10  # Start checking after 10s
+          periodSeconds: 5         # Check every 5 seconds
+          timeoutSeconds: 3        # Fail if no response within 3s
+          successThreshold: 1      # Consider ready after 1 success
+          failureThreshold: 3      # Mark not ready after 3 failures
+        
+        # Startup probe: For slow-starting applications
+        # Disables liveness/readiness checks until startup completes
+        # Use case: Model loading can take 20-30 seconds
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 10     # Allow up to 50s for startup (10 * 5s)
+        
+        # Environment variables
+        # Load configuration from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: churn-config
+        
+        # Additional environment variables (if needed)
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        # Load service token from Kubernetes Secret
+        - name: SERVICE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: churn-secrets
+              key: service-token
+        
+        # Volume mounts
+        # Map volumes defined below into the container filesystem
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+          readOnly: false  # Set to true if models are read-only
+        - name: logs
+          mountPath: /app/logs
+      
+      # Volumes
+      # Define storage that can be mounted into containers
+      volumes:
+      # PersistentVolumeClaim for model storage
+      # Persists across pod restarts and redeployments
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: churn-model-pvc
+      
+      # EmptyDir for logs (ephemeral, cleared on pod deletion)
+      # For production, use a PVC or external logging system
+      - name: logs
+        emptyDir: {}
+      
+      # Pod scheduling preferences (optional)
+      # Uncomment to control pod placement
+      
+      # affinity:
+      #   # Prefer to spread pods across different nodes
+      #   podAntiAffinity:
+      #     preferredDuringSchedulingIgnoredDuringExecution:
+      #     - weight: 100
+      #       podAffinityTerm:
+      #         labelSelector:
+      #           matchExpressions:
+      #           - key: app
+      #             operator: In
+      #             values:
+      #             - churn-api
+      #         topologyKey: kubernetes.io/hostname
+      
+      # Restart policy
+      # Always: Restart container if it stops (default for Deployments)
+      restartPolicy: Always
+      
+      # Security context (recommended for production)
+      # securityContext:
+      #   runAsNonRoot: true
+      #   runAsUser: 1000
+      #   fsGroup: 1000
+
+---
+# PersistentVolumeClaim for model storage
+# Requests persistent storage from the cluster
+# The cluster provisions storage based on available PersistentVolumes
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: churn-model-pvc
+  labels:
+    app: churn-api
+spec:
+  accessModes:
+    - ReadWriteOnce  # Can be mounted by one node at a time
+    # Alternatives:
+    # - ReadOnlyMany: Multiple nodes can read
+    # - ReadWriteMany: Multiple nodes can read/write (requires NFS or similar)
+  
+  resources:
+    requests:
+      storage: 5Gi  # Request 5GB of storage
+  
+  # Storage class (optional)
+  # Defines the type of storage to provision
+  # Leave blank to use default storage class
+  # storageClassName: fast-ssd
+
+
+

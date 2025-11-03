@@ -1,0 +1,139 @@
+# Kubernetes Ingress for Churn Prediction API
+#
+# Ingress provides HTTP/HTTPS routing to services from outside the cluster.
+# Benefits:
+# - Single external IP for multiple services
+# - TLS termination (HTTPS)
+# - Path-based and host-based routing
+# - Cost-effective (one load balancer for many services)
+#
+# Prerequisites:
+# - Ingress controller must be installed (nginx, traefik, etc.)
+# - For TLS, need valid certificate (Let's Encrypt, cert-manager)
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: churn-api-ingress
+  labels:
+    app: churn-api
+  annotations:
+    # Ingress controller specific annotations
+    # These vary by controller (nginx shown here)
+    
+    # Nginx ingress controller
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"  # Requests per second
+    
+    # CORS configuration (if needed for browser clients)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    
+    # Timeouts (for long-running requests)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    
+    # cert-manager for automatic TLS (if installed)
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  # Ingress class: Specifies which ingress controller to use
+  # Required in Kubernetes 1.18+
+  ingressClassName: nginx  # or traefik, aws-alb, gce, etc.
+  
+  # TLS configuration (HTTPS)
+  # Comment out for HTTP-only
+  tls:
+  - hosts:
+    - churn-api.example.com
+    secretName: churn-api-tls  # Secret containing TLS certificate
+    # Create secret manually or use cert-manager for automation
+  
+  # Routing rules
+  rules:
+  # Host-based routing
+  - host: churn-api.example.com  # TODO: Replace with your domain
+    http:
+      paths:
+      # Route all paths under / to the churn API service
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: churn-api-service
+            port:
+              number: 80
+
+---
+# Example: Path-based routing (multiple services on one domain)
+# Uncomment to route different paths to different services
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: multi-service-ingress
+# spec:
+#   ingressClassName: nginx
+#   rules:
+#   - host: api.example.com
+#     http:
+#       paths:
+#       # Churn prediction at /churn/*
+#       - path: /churn
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: churn-api-service
+#             port:
+#               number: 80
+#       # Another ML model at /fraud/*
+#       - path: /fraud
+#         pathType: Prefix
+#         backend:
+#           service:
+#             name: fraud-api-service
+#             port:
+#               number: 80
+
+---
+# TLS Certificate Secret (manual creation)
+# For production, use cert-manager for automatic certificates
+
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: churn-api-tls
+#   namespace: default
+# type: kubernetes.io/tls
+# data:
+#   tls.crt: <base64-encoded-certificate>
+#   tls.key: <base64-encoded-private-key>
+#
+# Create from files:
+# kubectl create secret tls churn-api-tls \
+#   --cert=path/to/cert.crt \
+#   --key=path/to/key.key
+
+---
+# cert-manager ClusterIssuer (for automatic Let's Encrypt certificates)
+# Install cert-manager first: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: admin@example.com  # TODO: Replace with your email
+#     privateKeySecretRef:
+#       name: letsencrypt-prod
+#     solvers:
+#     - http01:
+#         ingress:
+#           class: nginx
+
+
+

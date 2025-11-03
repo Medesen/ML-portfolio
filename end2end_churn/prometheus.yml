@@ -1,0 +1,55 @@
+# Prometheus Configuration for Churn Prediction Service
+
+global:
+  scrape_interval: 15s           # Scrape targets every 15 seconds
+  evaluation_interval: 15s       # Evaluate rules every 15 seconds
+  external_labels:
+    monitor: 'churn-prediction'
+    environment: 'development'
+
+# Alerting configuration (optional)
+# Uncomment and configure alertmanager if needed
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - 'alertmanager:9093'
+
+# Load alert rules from files
+# Uncomment to enable custom alert rules
+rule_files:
+  # - 'alerts/churn_alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Churn prediction API service
+  - job_name: 'churn-service'
+    
+    static_configs:
+      - targets: ['api:8000']  # Service discovery via docker network
+        labels:
+          environment: 'development'
+          service: 'churn-prediction'
+          component: 'api'
+    
+    metrics_path: '/metrics'     # Endpoint exposing Prometheus metrics
+    scrape_interval: 15s         # Scrape every 15 seconds
+    scrape_timeout: 10s          # Timeout after 10 seconds
+    
+    # Optional: Basic authentication if SERVICE_TOKEN is set
+    # bearer_token: 'your-service-token'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          environment: 'development'
+          service: 'prometheus'
+
+# Storage configuration
+# Data is persisted to /prometheus volume (defined in docker-compose.yml)
+# Retention: 30 days (configurable via command-line args in docker-compose)
+
+

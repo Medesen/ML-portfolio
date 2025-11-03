@@ -1,0 +1,75 @@
+# Kubernetes Service for Churn Prediction API
+#
+# A Service provides a stable network endpoint for a set of pods.
+# Even as pods are created/destroyed, the Service IP remains constant.
+#
+# Key concepts:
+# - Service discovery: Other pods can reach this at http://churn-api-service
+# - Load balancing: Traffic is distributed across all ready pods
+# - ClusterIP: Internal-only access (default)
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-api-service
+  labels:
+    app: churn-api
+  annotations:
+    description: "Load balancer for churn prediction API pods"
+
+spec:
+  # Service type determines how the service is exposed
+  type: ClusterIP
+  # ClusterIP: Internal only (default)
+  # NodePort: Exposes on each node's IP at a static port
+  # LoadBalancer: Provisions external load balancer (cloud providers)
+  
+  # Selector: Routes traffic to pods with matching labels
+  selector:
+    app: churn-api
+  
+  # Ports configuration
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80         # Service listens on port 80
+    targetPort: 8000  # Forwards to pod port 8000
+  
+  # Session affinity (optional)
+  # ClientIP: Route requests from same client to same pod
+  # None: Random load balancing (default)
+  sessionAffinity: None
+  
+  # Advanced load balancing (optional)
+  # ipFamilyPolicy: SingleStack
+  # ipFamilies:
+  # - IPv4
+
+---
+# Alternative: LoadBalancer Service (for cloud deployments)
+# Uncomment to expose API externally via cloud load balancer
+
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: churn-api-loadbalancer
+#   labels:
+#     app: churn-api
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: churn-api
+#   ports:
+#   - protocol: TCP
+#     port: 80
+#     targetPort: 8000
+#   # Cloud-specific annotations
+#   # AWS:
+#   # annotations:
+#   #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
+#   # GCP:
+#   # annotations:
+#   #   cloud.google.com/load-balancer-type: Internal
+
+
+
