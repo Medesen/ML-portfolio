@@ -401,7 +401,7 @@ jobs:
           # Extract metrics
           p95 = predict_row['95%'].values[0]
           p99 = predict_row['99%'].values[0]
-          failure_rate = (predict_row['# failures'].values[0] / predict_row['# requests'].values[0]) * 100
+          failure_rate = (predict_row['Failure Count'].values[0] / predict_row['Request Count'].values[0]) * 100
           
           print(f"\n📊 Load Test Results:")
           print(f"   p95 latency: {p95}ms")
