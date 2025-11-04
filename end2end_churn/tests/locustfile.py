@@ -17,9 +17,7 @@ Load Testing for SLO Validation
 """
 
 from locust import HttpUser, task, between, events
-import json
 import random
-import time
 
 
 # Sample customer data for realistic load testing
@@ -140,14 +138,8 @@ class ChurnAPIUser(HttpUser):
         ) as response:
             if response.status_code != 200:
                 response.failure(f"Got status {response.status_code}")
-            elif response.elapsed.total_seconds() > 0.5:
-                # Flag slow requests (p95 SLO is 200ms, but allow 500ms for CI)
-                response.failure(
-                    f"Request took {response.elapsed.total_seconds():.3f}s "
-                    f"(p95 SLO: 0.2s, p99 SLO: 0.5s)"
-                )
             else:
-                # Verify response structure
+                # Verify response structure (don't fail on slow responses - let SLO check handle that)
                 try:
                     data = response.json()
                     if 'churn_probability' not in data or 'churn_prediction' not in data:
@@ -202,14 +194,12 @@ def on_test_stop(environment, **kwargs):
     print("SLO VALIDATION RESULTS")
     print("="*70)
     
-    # Get stats for /predict endpoint
-    predict_stats = stats.get("/predict", "GET")
-    if predict_stats is None:
-        # Try POST method
-        for stat in stats.entries.values():
-            if stat.name == "/predict":
-                predict_stats = stat
-                break
+    # Get stats for /predict endpoint (POST method)
+    predict_stats = None
+    for stat in stats.entries.values():
+        if stat.name == "/predict" and stat.method == "POST":
+            predict_stats = stat
+            break
     
     if predict_stats and predict_stats.num_requests > 0:
         # Calculate percentiles
@@ -218,7 +208,7 @@ def on_test_stop(environment, **kwargs):
         p99 = predict_stats.get_response_time_percentile(0.99)
         error_rate = (predict_stats.num_failures / predict_stats.num_requests) * 100
         
-        print(f"\n📊 /predict endpoint statistics:")
+        print("\n📊 /predict endpoint statistics:")
         print(f"   Total requests: {predict_stats.num_requests}")
         print(f"   Failures: {predict_stats.num_failures}")
         print(f"   Error rate: {error_rate:.2f}%")
@@ -228,7 +218,7 @@ def on_test_stop(environment, **kwargs):
         print(f"   Avg latency: {predict_stats.avg_response_time:.0f}ms")
         print(f"   RPS: {predict_stats.total_rps:.1f}")
         
-        print(f"\n📋 SLO Compliance Check:")
+        print("\n📋 SLO Compliance Check:")
         
         # SLO 1: p95 latency < 500ms (lenient for CI, production is 200ms)
         p95_slo = 500  # ms
