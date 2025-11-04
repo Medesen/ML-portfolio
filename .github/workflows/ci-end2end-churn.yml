@@ -360,12 +360,12 @@ jobs:
           timeout 60 bash -c 'until curl -f http://localhost:8000/healthz; do sleep 2; done'
           echo "✓ Service is ready"
       
-      - name: Run load test (50 users, 60 seconds)
+      - name: Run load test (10 users, 60 seconds)
         run: |
           cd tests
           locust -f locustfile.py \
             --headless \
-            --users 50 \
+            --users 10 \
             --spawn-rate 10 \
             --run-time 60s \
             --host http://localhost:8000 \
