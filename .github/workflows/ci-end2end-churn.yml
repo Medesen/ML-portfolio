@@ -1,5 +1,10 @@
 name: CI - End2End Churn Prediction
 
+# Required permissions for security scanning
+permissions:
+  contents: read
+  security-events: write  # Required for uploading Trivy SARIF results
+
 # Run on pushes to main and PRs targeting main
 on:
   push:
@@ -338,6 +343,11 @@ jobs:
         run: |
           mkdir -p secrets
           touch secrets/service_token.txt
+      
+      - name: Train model for load testing
+        run: |
+          docker compose run --rm --entrypoint python api train.py --config config/train_config_quick.yaml
+        timeout-minutes: 10
       
       - name: Build and start services
         run: |
