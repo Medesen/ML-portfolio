@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
     gosu \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first (for Docker layer caching)
