@@ -30,8 +30,11 @@ def preprocess_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     
     # Convert integer columns to float to handle missing values (NaN)
     # This prevents MLflow schema mismatch warnings and allows proper NaN handling
-    df['SeniorCitizen'] = df['SeniorCitizen'].astype(float)
-    df['tenure'] = df['tenure'].astype(float)
+    # Only convert if columns exist (for compatibility with minimal test fixtures)
+    if 'SeniorCitizen' in df.columns:
+        df['SeniorCitizen'] = df['SeniorCitizen'].astype(float)
+    if 'tenure' in df.columns:
+        df['tenure'] = df['tenure'].astype(float)
     
     # Separate features and target
     X = df.drop('Churn', axis=1)

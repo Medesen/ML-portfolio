@@ -201,6 +201,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
+      - name: Initialize secrets directory
+        run: |
+          mkdir -p secrets
+          touch secrets/service_token.txt
+      
       - name: Build Docker image
         run: |
           docker compose build
@@ -258,6 +263,11 @@ jobs:
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      
+      - name: Initialize secrets directory
+        run: |
+          mkdir -p secrets
+          touch secrets/service_token.txt
       
       - name: Build Docker image for scanning
         run: |
