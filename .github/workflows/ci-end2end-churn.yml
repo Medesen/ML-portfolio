@@ -352,7 +352,8 @@ jobs:
       - name: Build and start services
         run: |
           docker compose build api
-          docker compose up -d
+          # Disable rate limiting for load testing to test raw API performance
+          RATE_LIMIT_ENABLED=false docker compose up -d
           
           # Wait for service to be ready (up to 60 seconds)
           echo "Waiting for service to be ready..."

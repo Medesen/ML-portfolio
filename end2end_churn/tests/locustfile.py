@@ -126,6 +126,11 @@ class ChurnAPIUser(HttpUser):
         customer = customer.copy()  # Don't modify original
         customer['tenure'] = random.randint(1, 72)
         customer['MonthlyCharges'] = round(random.uniform(20, 120), 2)
+        # Recalculate TotalCharges to pass validation (tenure * monthly * factor)
+        customer['TotalCharges'] = round(
+            customer['tenure'] * customer['MonthlyCharges'] * random.uniform(0.8, 1.1),
+            2
+        )
         
         with self.client.post(
             "/predict",
