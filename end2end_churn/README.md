@@ -917,6 +917,12 @@ docker compose ps
 docker system prune -a
 ```
 
+**"Docker Compose is configured to build using Bake, but buildx isn't installed":**
+- Harmless warning from Docker Compose V2
+- Builds work identically - Docker automatically falls back to standard builder
+- To eliminate: Update Docker Desktop to the latest version or install buildx
+- Safe to ignore - no impact on functionality
+
 ### Application Issues
 
 **Multiprocessing Cleanup Warnings:** During training (`make train` or `make setup`), you may see `ChildProcessError: [Errno 10] No child processes` warnings after the model finishes training. These are **harmless** multiprocessing cleanup warnings and do not affect model quality.
