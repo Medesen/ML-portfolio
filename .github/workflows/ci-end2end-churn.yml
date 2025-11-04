@@ -334,6 +334,11 @@ jobs:
           pip install --upgrade pip
           pip install locust==2.32.3
       
+      - name: Initialize secrets directory
+        run: |
+          mkdir -p secrets
+          touch secrets/service_token.txt
+      
       - name: Build and start services
         run: |
           docker compose build api
