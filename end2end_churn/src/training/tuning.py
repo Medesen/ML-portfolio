@@ -8,6 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+from joblib import parallel_backend
 
 from ..utils.logger import get_logger
 
@@ -43,8 +44,9 @@ def perform_grid_search(X_train: pd.DataFrame, y_train: pd.Series,
     logger.info(f"Grid search with {cv_folds}-fold cross-validation")
     
     # Use default model if none provided (backward compatibility)
+    # Note: Set model's n_jobs=1 to avoid nested parallelism (GridSearchCV handles parallelization)
     if model is None:
-        model = RandomForestClassifier(random_state=random_state, n_jobs=n_jobs)
+        model = RandomForestClassifier(random_state=random_state, n_jobs=1)
     
     # Use default parameter grid if none provided
     if param_grid is None:
@@ -74,9 +76,11 @@ def perform_grid_search(X_train: pd.DataFrame, y_train: pd.Series,
         return_train_score=True
     )
     
-    # Fit
+    # Fit with explicit backend context for clean worker shutdown
+    # This prevents "ChildProcessError: No child processes" warnings in Docker
     start_time = time.time()
-    grid_search.fit(X_train, y_train)
+    with parallel_backend('loky', n_jobs=n_jobs):
+        grid_search.fit(X_train, y_train)
     search_time = time.time() - start_time
     
     logger.info(f"✓ Grid search complete in {search_time:.1f} seconds")

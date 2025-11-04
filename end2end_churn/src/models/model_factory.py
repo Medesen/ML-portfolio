@@ -30,19 +30,26 @@ def get_model(model_type: str, random_state: int = 42):
     Raises:
         ValueError: If model_type is not recognized
     """
+    # Set n_jobs=1 for all models to avoid nested parallelism
+    # GridSearchCV handles parallelization at the top level
     models = {
-        'random_forest': RandomForestClassifier(random_state=random_state),
+        'random_forest': RandomForestClassifier(
+            random_state=random_state,
+            n_jobs=1  # Avoid nested parallelism with GridSearchCV
+        ),
         'xgboost': xgb.XGBClassifier(
             random_state=random_state,
             eval_metric='logloss',
             use_label_encoder=False,  # Suppress label encoder warnings
             objective='binary:logistic',  # Explicit binary classification
-            verbosity=0  # Suppress training output warnings
+            verbosity=0,  # Suppress training output warnings
+            n_jobs=1  # Avoid nested parallelism with GridSearchCV
         ),
         'logistic_regression': LogisticRegression(
             random_state=random_state,
             max_iter=1000,  # Increase for convergence
-            solver='lbfgs'  # Good for small-to-medium datasets
+            solver='lbfgs',  # Good for small-to-medium datasets
+            n_jobs=1  # Avoid nested parallelism with GridSearchCV
         )
     }
     

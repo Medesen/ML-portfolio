@@ -919,9 +919,18 @@ docker system prune -a
 
 ### Application Issues
 
-**Training warnings (multiprocessing cleanup):**
-- Harmless warnings after parallel grid search
-- Verify success: Look for "Training workflow complete!" message
+**Multiprocessing Cleanup Warnings:** During training (`make train` or `make setup`), you may see `ChildProcessError: [Errno 10] No child processes` warnings after the model finishes training. These are **harmless** multiprocessing cleanup warnings and do not affect model quality.
+
+**What's happening:** The training process uses parallel processing (`GridSearchCV` with `n_jobs=-1`) to speed up hyperparameter search by testing multiple parameter combinations simultaneously. When the Docker container shuts down after training completes, Python's ResourceTracker attempts to clean up worker processes that have already terminated, resulting in these warning messages.
+
+**Why this occurs in Docker:** Short-lived containers exit quickly after the main process completes, creating a race condition where child processes terminate before Python's cleanup code runs. This is a known behavior in scikit-learn's parallel processing (see [Python issue #38119](https://bugs.python.org/issue38119)).
+
+**Verification:** Check for the "Training workflow complete!" message and verify model files were created:
+```bash
+ls models/  # Should show churn_model_latest.joblib
+```
+
+**To eliminate warnings (optional):** Set `n_jobs: 1` in your training config. This disables parallel processing, making training slower but removing the warnings.
 
 **Model not found:**
 ```bash

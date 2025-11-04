@@ -28,6 +28,11 @@ def preprocess_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     # Convert TotalCharges from string to numeric
     df['TotalCharges'] = pd.to_numeric(df['TotalCharges'], errors='coerce')
     
+    # Convert integer columns to float to handle missing values (NaN)
+    # This prevents MLflow schema mismatch warnings and allows proper NaN handling
+    df['SeniorCitizen'] = df['SeniorCitizen'].astype(float)
+    df['tenure'] = df['tenure'].astype(float)
+    
     # Separate features and target
     X = df.drop('Churn', axis=1)
     y = df['Churn'].map({'Yes': 1, 'No': 0})

@@ -64,12 +64,12 @@ def align_schema(df: pd.DataFrame, expected_columns: List[str]) -> Tuple[pd.Data
 customer_schema = pa.DataFrameSchema({
     # Demographics
     "gender": Column(str, Check.isin(["Male", "Female"]), nullable=True),
-    "SeniorCitizen": Column(int, Check.isin([0, 1]), nullable=True),
+    "SeniorCitizen": Column(float, Check.isin([0, 1]), nullable=True),
     "Partner": Column(str, Check.isin(["Yes", "No"]), nullable=True),
     "Dependents": Column(str, Check.isin(["Yes", "No"]), nullable=True),
     
     # Account info (numeric constraints)
-    "tenure": Column(int, Check.greater_than_or_equal_to(0), nullable=True),
+    "tenure": Column(float, Check.greater_than_or_equal_to(0), nullable=True),
     "MonthlyCharges": Column(float, Check.greater_than(0), nullable=True),
     "TotalCharges": Column(float, Check.greater_than_or_equal_to(0), nullable=True),
     

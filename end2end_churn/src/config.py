@@ -5,7 +5,7 @@ This module provides configuration classes for all components of the churn predi
 system, supporting loading from files (YAML/JSON), environment variables, or defaults.
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 import yaml
 import json
@@ -60,7 +60,8 @@ class DataConfig(BaseModel):
     val_size: float = Field(0.25, ge=0.0, le=1.0, description="Validation set proportion (of train+val)")
     stratify: bool = Field(True, description="Stratify splits by target")
     
-    @validator('test_size', 'val_size')
+    @field_validator('test_size', 'val_size')
+    @classmethod
     def check_split_size(cls, v):
         """Validate that split sizes are between 0 and 1 (exclusive)."""
         if not 0 < v < 1:
@@ -80,7 +81,8 @@ class ModelConfig(BaseModel):
     scoring: str = Field("roc_auc", description="Scoring metric for CV")
     n_jobs: int = Field(-1, description="Parallel jobs (-1 = all cores)")
     
-    @validator('model_type')
+    @field_validator('model_type')
+    @classmethod
     def check_model_type(cls, v):
         """Validate that model_type is one of the supported types."""
         valid_types = ['random_forest', 'xgboost', 'logistic_regression']
@@ -88,14 +90,16 @@ class ModelConfig(BaseModel):
             raise ValueError(f"model_type must be one of {valid_types}, got {v}")
         return v
     
-    @validator('n_estimators_grid', 'min_samples_split_grid', 'min_samples_leaf_grid')
+    @field_validator('n_estimators_grid', 'min_samples_split_grid', 'min_samples_leaf_grid')
+    @classmethod
     def check_positive_values(cls, v):
         """Validate that all grid values are positive."""
         if any(val <= 0 for val in v):
             raise ValueError("All grid values must be positive")
         return v
     
-    @validator('max_depth_grid')
+    @field_validator('max_depth_grid')
+    @classmethod
     def check_max_depth(cls, v):
         """Validate that max_depth values are positive or None."""
         for val in v:
@@ -145,7 +149,8 @@ class ServiceConfig(BaseModel):
     max_request_size_mb: int = Field(10, ge=1, description="Maximum request size in MB")
     service_token: Optional[str] = Field(None, description="Bearer token for authentication")
     
-    @validator('log_level')
+    @field_validator('log_level')
+    @classmethod
     def check_log_level(cls, v):
         """Validate log level is one of the standard Python logging levels."""
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
