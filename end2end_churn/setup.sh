@@ -28,6 +28,16 @@ fi
 echo "✅ Docker is running"
 echo ""
 
+# Create secrets directory if it doesn't exist (for optional authentication)
+if [ ! -d "secrets" ]; then
+    echo "Creating secrets directory..."
+    mkdir -p secrets
+    # Create empty token file (authentication is optional)
+    touch secrets/service_token.txt
+    echo "✅ Secrets directory created"
+    echo ""
+fi
+
 # Step 1: Build containers
 echo "================================================================================"
 echo "📦 Step 1/2: Building Docker containers..."

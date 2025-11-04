@@ -111,6 +111,12 @@ help:
 
 setup: build
 	@echo "Running initial setup..."
+	@echo ""
+	@echo "Creating secrets directory (for optional authentication)..."
+	@mkdir -p secrets
+	@touch secrets/service_token.txt
+	@echo "✓ Secrets directory created"
+	@echo ""
 	@echo "Building Docker image..."
 	@docker compose build
 	@echo ""

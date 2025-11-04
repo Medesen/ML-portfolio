@@ -36,6 +36,16 @@ if (-not (Test-DockerRunning)) {
 Write-Host "Docker is running ✓" -ForegroundColor Green
 Write-Host ""
 
+# Create secrets directory if it doesn't exist (for optional authentication)
+if (-not (Test-Path "secrets")) {
+    Write-Host "Creating secrets directory..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path "secrets" | Out-Null
+    # Create empty token file (authentication is optional)
+    New-Item -ItemType File -Path "secrets\service_token.txt" | Out-Null
+    Write-Host "✓ Secrets directory created" -ForegroundColor Green
+    Write-Host ""
+}
+
 # Step 1: Build containers
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host "📦 Step 1/2: Building Docker containers..." -ForegroundColor Cyan
