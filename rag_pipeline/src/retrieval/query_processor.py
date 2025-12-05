@@ -4,9 +4,14 @@ from __future__ import annotations
 from typing import List, Dict, Any, Optional, Union
 import time
 from pathlib import Path
+import numpy as np
 
 from .embedder import Embedder
 from .vector_store import VectorStore
+from .bm25_index import BM25Index
+from .hybrid_searcher import HybridSearcher
+from .query_rewriter import QueryRewriter
+from .reranker import CrossEncoderReranker
 from ..utils.logger import get_logger
 
 
@@ -24,6 +29,8 @@ class QueryProcessor:
         config,
         embedder: Embedder,
         vector_store: VectorStore,
+        bm25_index: Optional[BM25Index] = None,
+        query_rewriter: Optional[QueryRewriter] = None,
         logger_name: str = "query_processor"
     ):
         """
@@ -33,27 +40,71 @@ class QueryProcessor:
             config: Configuration object
             embedder: Embedder instance for generating query embeddings
             vector_store: VectorStore instance for retrieval
+            bm25_index: Optional BM25Index instance for hybrid search
+            query_rewriter: Optional QueryRewriter instance for LLM query rewriting
             logger_name: Logger name
         """
         self.config = config
         self.embedder = embedder
         self.vector_store = vector_store
+        self.bm25_index = bm25_index
+        self.query_rewriter = query_rewriter
         self.logger = get_logger(logger_name)
         
         # Load retrieval configuration
         self.default_top_k = config.get("retrieval.top_k", 20)
         self.min_similarity = config.get("retrieval.min_similarity", 0.0)
-        self.merge_strategy = config.get("retrieval.merge_strategy", "interleave")
-        self.deduplicate = config.get("retrieval.deduplicate", True)
         
-        self.logger.info("Query processor initialized")
+        # Hybrid search configuration
+        self.search_mode = config.get("retrieval.search_mode", "semantic")
+        self.hybrid_alpha = config.get("retrieval.hybrid_alpha", 0.7)
+        self.rrf_k = config.get("retrieval.rrf_k", 60)
+        self.overfetch_factor = config.get("retrieval.overfetch_factor", 3)
+        
+        # Reranking configuration
+        self.reranking_enabled = config.get("reranking.enabled", False)
+        self.reranking_model = config.get("reranking.model", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+        self.reranking_overfetch_k = config.get("reranking.overfetch_k", 50)
+        self.reranking_final_top_k = config.get("reranking.final_top_k", 10)
+        self.reranking_batch_size = config.get("reranking.batch_size", 32)
+        self.reranking_device = config.get("reranking.device", config.get("embeddings.device", "cpu"))
+        
+        # Initialize reranker if enabled
+        self.reranker: Optional[CrossEncoderReranker] = None
+        if self.reranking_enabled and self.reranking_model:
+            self.reranker = CrossEncoderReranker(
+                model_name=self.reranking_model,
+                device=self.reranking_device,
+                batch_size=self.reranking_batch_size,
+                logger_name="reranker"
+            )
+            self.logger.info(
+                f"Reranker initialized (model={self.reranking_model}, "
+                f"overfetch_k={self.reranking_overfetch_k}, "
+                f"final_top_k={self.reranking_final_top_k})"
+            )
+        
+        # Initialize hybrid searcher if BM25 index is available
+        self.hybrid_searcher: Optional[HybridSearcher] = None
+        if bm25_index is not None:
+            self.hybrid_searcher = HybridSearcher(
+                vector_store=vector_store,
+                bm25_index=bm25_index,
+                embedder=embedder,
+                alpha=self.hybrid_alpha,
+                rrf_k=self.rrf_k,
+                reranker=self.reranker,
+                logger_name="hybrid_searcher"
+            )
+            self.logger.info("Hybrid searcher initialized")
+        
+        self.logger.info(f"Query processor initialized (search_mode={self.search_mode})")
     
     def process_query(
         self,
         query_text: str,
         strategy: Optional[str] = None,
         top_k: Optional[int] = None,
-        filters: Optional[Dict[str, Any]] = None,
         show_full_content: bool = False
     ) -> Dict[str, Any]:
         """
@@ -61,9 +112,8 @@ class QueryProcessor:
         
         Args:
             query_text: Natural language query
-            strategy: Chunking strategy to query ("fixed", "semantic", "hierarchical", "all", or None for default)
+            strategy: Chunking strategy to query ("fixed", "semantic", "hierarchical", or None for default)
             top_k: Number of results to return (None for default)
-            filters: Metadata filters for ChromaDB (e.g., {"doc_type": "guide"})
             show_full_content: Whether to include full chunk content
             
         Returns:
@@ -71,17 +121,33 @@ class QueryProcessor:
         """
         start_time = time.time()
         
+        # Rewrite query with LLM if available
+        rewrite_metadata = None
+        if self.query_rewriter is not None:
+            rewrite_result = self.query_rewriter.rewrite(query_text)
+            query_text = rewrite_result["rewritten_query"]
+            rewrite_metadata = {
+                "original_query": rewrite_result["original_query"],
+                "rewritten_query": rewrite_result["rewritten_query"],
+                "from_cache": rewrite_result["from_cache"],
+                "rewrite_failed": rewrite_result["rewrite_failed"],
+                "rewrite_skipped": rewrite_result["rewrite_skipped"],
+            }
+        
         # Normalize query
         query_text = self._normalize_query(query_text)
         self.logger.info(f"Processing query: '{query_text}'")
         
         # Determine strategy
         if strategy is None:
-            strategy = self.config.get("retrieval.strategy", "all")
+            strategy = self.config.get("retrieval.strategy", "fixed")
         
-        # Determine top_k
+        # Determine top_k: reranking.final_top_k takes precedence when reranking is enabled
         if top_k is None:
-            top_k = self.default_top_k
+            if self.reranking_enabled:
+                top_k = self.reranking_final_top_k
+            else:
+                top_k = self.default_top_k
         
         # Generate query embedding
         self.logger.info("Generating query embedding...")
@@ -90,16 +156,11 @@ class QueryProcessor:
         embed_time = time.time() - embed_start
         self.logger.info(f"Query embedding generated in {embed_time:.3f}s")
         
-        # Retrieve from appropriate strategy/strategies
+        # Retrieve from strategy
         retrieval_start = time.time()
-        if strategy == "all":
-            results = self._query_all_strategies(
-                query_embedding, top_k, filters
-            )
-        else:
-            results = self._query_single_strategy(
-                query_embedding, strategy, top_k, filters
-            )
+        results = self._query_single_strategy(
+            query_embedding, strategy, top_k
+        )
         retrieval_time = time.time() - retrieval_start
         
         total_time = time.time() - start_time
@@ -113,7 +174,6 @@ class QueryProcessor:
                 "total_results": len(results),
                 "top_k_requested": top_k,
                 "min_similarity": self.min_similarity,
-                "filters": filters,
                 "timing": {
                     "embedding_time": round(embed_time, 3),
                     "retrieval_time": round(retrieval_time, 3),
@@ -122,10 +182,9 @@ class QueryProcessor:
             }
         }
         
-        # Add strategy info if querying all
-        if strategy == "all":
-            strategies_queried = list(set(r["strategy"] for r in results))
-            formatted_results["metadata"]["strategies_queried"] = strategies_queried
+        # Add rewrite metadata if query was rewritten
+        if rewrite_metadata is not None:
+            formatted_results["metadata"]["query_rewriting"] = rewrite_metadata
         
         self.logger.info(
             f"Query completed: {len(results)} results in {total_time:.3f}s"
@@ -133,39 +192,172 @@ class QueryProcessor:
         
         return formatted_results
     
+    def process_query_hybrid(
+        self,
+        query_text: str,
+        strategy: str,
+        top_k: Optional[int] = None,
+        alpha: Optional[float] = None,
+        search_mode: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Process a query using hybrid search (semantic + keyword with RRF).
+        
+        Args:
+            query_text: Natural language query
+            strategy: Chunking strategy to query ("fixed", "semantic", "hierarchical")
+            top_k: Number of results to return (None for default)
+            alpha: Override default alpha weight (0.0-1.0)
+            search_mode: Override default search mode ("semantic", "keyword", "hybrid")
+            
+        Returns:
+            Dictionary with query results
+        """
+        # Rewrite query with LLM if available
+        rewrite_metadata = None
+        if self.query_rewriter is not None:
+            rewrite_result = self.query_rewriter.rewrite(query_text)
+            query_text = rewrite_result["rewritten_query"]
+            rewrite_metadata = {
+                "original_query": rewrite_result["original_query"],
+                "rewritten_query": rewrite_result["rewritten_query"],
+                "from_cache": rewrite_result["from_cache"],
+                "rewrite_failed": rewrite_result["rewrite_failed"],
+                "rewrite_skipped": rewrite_result["rewrite_skipped"],
+            }
+        
+        # Normalize query
+        query_text = self._normalize_query(query_text)
+        self.logger.info(f"Processing hybrid query: '{query_text}'")
+        
+        # Determine parameters: reranking.final_top_k takes precedence when reranking is enabled
+        if top_k is None:
+            top_k = self.reranking_final_top_k if self.reranking_enabled else self.default_top_k
+        search_mode = search_mode or self.search_mode
+        
+        # Check if hybrid searcher is available
+        if self.hybrid_searcher is None:
+            self.logger.warning(
+                "Hybrid searcher not available (BM25 index not loaded). "
+                "Falling back to semantic search."
+            )
+            return self.process_query(query_text, strategy=strategy, top_k=top_k)
+        
+        # Load BM25 index for the strategy if not already loaded or different strategy
+        if self.bm25_index._loaded_strategy != strategy:
+            if not self.bm25_index.load_index(strategy):
+                self.logger.warning(
+                    f"BM25 index not found for strategy '{strategy}'. "
+                    "Falling back to semantic search."
+                )
+                return self.process_query(query_text, strategy=strategy, top_k=top_k)
+        
+        # Perform search based on mode
+        if search_mode == "keyword":
+            result = self.hybrid_searcher.search_keyword_only(
+                query=query_text,
+                top_k=top_k
+            )
+        elif search_mode == "semantic":
+            result = self.hybrid_searcher.search_semantic_only(
+                query=query_text,
+                strategy=strategy,
+                top_k=top_k
+            )
+        else:  # hybrid
+            # When reranking is enabled, use reranking parameters
+            if self.reranking_enabled and self.reranker is not None:
+                result = self.hybrid_searcher.search(
+                    query=query_text,
+                    strategy=strategy,
+                    top_k=top_k,
+                    overfetch_k=self.reranking_overfetch_k,
+                    alpha=alpha,
+                    rerank_top_k=self.reranking_final_top_k
+                )
+            else:
+                result = self.hybrid_searcher.search(
+                    query=query_text,
+                    strategy=strategy,
+                    top_k=top_k,
+                    overfetch_factor=self.overfetch_factor,
+                    alpha=alpha
+                )
+        
+        # Add search_mode to metadata
+        result['metadata']['search_mode'] = search_mode
+        
+        # Add rewrite metadata if query was rewritten
+        if rewrite_metadata is not None:
+            result['metadata']['query_rewriting'] = rewrite_metadata
+        
+        # Normalize timing keys for compatibility with format_console_output
+        if 'timing' in result['metadata']:
+            timing = result['metadata']['timing']
+            # Map hybrid search timing keys to expected format
+            normalized_timing = {
+                'total_time': timing.get('total', 0),
+                'retrieval_time': timing.get('semantic_search', 0) + timing.get('keyword_search', 0) + timing.get('fusion', 0),
+                'embedding_time': 0,  # Embedding is included in semantic_search time for hybrid
+            }
+            # Preserve additional timing info
+            if 'rerank_ms' in timing:
+                normalized_timing['rerank_ms'] = timing['rerank_ms']
+            result['metadata']['timing'] = normalized_timing
+        
+        self.logger.info(
+            f"Hybrid query completed: {len(result['results'])} results "
+            f"(mode={search_mode})"
+        )
+        
+        return result
+    
     def _normalize_query(self, query_text: str) -> str:
         """
-        Normalize query text.
+        Normalize and validate query text.
         
         Args:
             query_text: Raw query text
             
         Returns:
             Normalized query text
+            
+        Raises:
+            ValueError: If query is empty after normalization
         """
         # Basic normalization: strip whitespace
         query_text = query_text.strip()
         
+        # Check for empty query
+        if not query_text:
+            raise ValueError("Query cannot be empty")
+        
         # Remove extra whitespace
         query_text = " ".join(query_text.split())
+        
+        # Limit query length to prevent performance issues
+        max_query_length = self.config.get("retrieval.max_query_length", 1000)
+        if len(query_text) > max_query_length:
+            self.logger.warning(
+                f"Query truncated from {len(query_text)} to {max_query_length} characters"
+            )
+            query_text = query_text[:max_query_length]
         
         return query_text
     
     def _query_single_strategy(
         self,
-        query_embedding: List[float],
+        query_embedding: Union[List[float], np.ndarray],
         strategy: str,
         top_k: int,
-        filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         Query a single chunking strategy.
         
         Args:
-            query_embedding: Query embedding vector
+            query_embedding: Query embedding vector (list or numpy array)
             strategy: Strategy name
             top_k: Number of results
-            filters: Metadata filters
             
         Returns:
             List of result dictionaries
@@ -186,7 +378,6 @@ class QueryProcessor:
             collection_name=strategy,
             query_embedding=query_embedding.tolist(),
             n_results=top_k,
-            where=filters
         )
         
         # Format results
@@ -201,59 +392,6 @@ class QueryProcessor:
         
         self.logger.info(f"Retrieved {len(results)} results from '{strategy}'")
         return results
-    
-    def _query_all_strategies(
-        self,
-        query_embedding: List[float],
-        top_k: int,
-        filters: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Query all enabled chunking strategies and merge results.
-        
-        Args:
-            query_embedding: Query embedding vector
-            top_k: Number of results (total across all strategies)
-            filters: Metadata filters
-            
-        Returns:
-            List of merged result dictionaries
-        """
-        self.logger.info(f"Querying all strategies (top_k={top_k})")
-        
-        # Get list of available strategies
-        available_collections = self.vector_store.list_collections()
-        strategies = ["fixed", "semantic", "hierarchical"]
-        strategies = [s for s in strategies if s in available_collections]
-        
-        if not strategies:
-            self.logger.warning(
-                "No indexed strategies found. Run 'index' command first."
-            )
-            return []
-        
-        self.logger.info(f"Found {len(strategies)} strategies: {strategies}")
-        
-        # Query each strategy
-        all_results = []
-        for strategy in strategies:
-            # Query with higher top_k (2x requested) to ensure we have enough results
-            # after merging and deduplication. Example: if top_k=20, we get 40 from each
-            # strategy, then merge and deduplicate down to best 20 overall.
-            strategy_results = self._query_single_strategy(
-                query_embedding, strategy, top_k * 2, filters
-            )
-            all_results.extend(strategy_results)
-        
-        # Merge results
-        merged_results = self._merge_results(all_results, top_k)
-        
-        self.logger.info(
-            f"Merged {len(all_results)} results from {len(strategies)} strategies "
-            f"into top {len(merged_results)}"
-        )
-        
-        return merged_results
     
     def _format_results(
         self,
@@ -281,10 +419,10 @@ class QueryProcessor:
         for i, (chunk_id, content, metadata, distance) in enumerate(
             zip(ids, documents, metadatas, distances)
         ):
-            # Convert distance to similarity score (ChromaDB uses L2 distance)
-            # For normalized vectors: similarity = 1 - (distance^2 / 2)
-            # Simplified: similarity ≈ 1 - distance/2 (good approximation)
-            similarity_score = max(0.0, 1.0 - (distance / 2.0))
+            # Convert L2 distance to cosine similarity for normalized vectors
+            # For normalized vectors: L2_distance² = 2 * (1 - cosine_similarity)
+            # Therefore: cosine_similarity = 1 - (L2_distance² / 2)
+            similarity_score = max(0.0, 1.0 - (distance ** 2 / 2.0))
             
             result = {
                 "rank": i + 1,
@@ -300,114 +438,11 @@ class QueryProcessor:
         
         return formatted
     
-    def _merge_results(
-        self,
-        results: List[Dict[str, Any]],
-        top_k: int
-    ) -> List[Dict[str, Any]]:
-        """
-        Merge results from multiple strategies.
-        
-        Args:
-            results: List of results from different strategies
-            top_k: Number of results to return
-            
-        Returns:
-            Merged and ranked results
-        """
-        if self.merge_strategy == "top_scores":
-            # Top scores strategy: Sort all results by similarity regardless of strategy
-            # This maximizes relevance but may favor strategies that produce higher scores
-            merged = sorted(
-                results,
-                key=lambda x: x["similarity_score"],
-                reverse=True
-            )
-        else:  # "interleave"
-            # Interleave strategy: Round-robin from each strategy to ensure balanced representation
-            # Example with 3 strategies: [Fixed_1, Semantic_1, Hier_1, Fixed_2, Semantic_2, ...]
-            # This prevents one strategy from dominating results
-            
-            # Group results by their chunking strategy
-            by_strategy = {}
-            for result in results:
-                strategy = result["strategy"]
-                if strategy not in by_strategy:
-                    by_strategy[strategy] = []
-                by_strategy[strategy].append(result)
-            
-            # Sort each strategy's results by similarity score (best first)
-            for strategy in by_strategy:
-                by_strategy[strategy].sort(
-                    key=lambda x: x["similarity_score"],
-                    reverse=True
-                )
-            
-            # Interleave results
-            merged = []
-            strategy_names = list(by_strategy.keys())
-            max_per_strategy = max(len(r) for r in by_strategy.values())
-            
-            for i in range(max_per_strategy):
-                for strategy in strategy_names:
-                    if i < len(by_strategy[strategy]):
-                        merged.append(by_strategy[strategy][i])
-                    if len(merged) >= top_k:
-                        break
-                if len(merged) >= top_k:
-                    break
-        
-        # Deduplicate if enabled (same doc_id + similar content)
-        if self.deduplicate:
-            merged = self._deduplicate_results(merged)
-        
-        # Take top_k
-        merged = merged[:top_k]
-        
-        # Re-rank
-        for i, result in enumerate(merged):
-            result["rank"] = i + 1
-        
-        return merged
-    
-    def _deduplicate_results(
-        self,
-        results: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Remove duplicate results (same doc_id appearing multiple times).
-        
-        Keeps the result with highest similarity score for each doc_id.
-        
-        Args:
-            results: List of results
-            
-        Returns:
-            Deduplicated results
-        """
-        seen_docs = {}
-        
-        for result in results:
-            doc_id = result["doc_id"]
-            
-            if doc_id not in seen_docs:
-                seen_docs[doc_id] = result
-            else:
-                # Keep the one with higher similarity
-                if result["similarity_score"] > seen_docs[doc_id]["similarity_score"]:
-                    seen_docs[doc_id] = result
-        
-        # Convert back to list and sort by similarity
-        deduplicated = list(seen_docs.values())
-        deduplicated.sort(key=lambda x: x["similarity_score"], reverse=True)
-        
-        return deduplicated
-    
     def format_console_output(
         self,
         results: Dict[str, Any],
         show_full_content: bool = False,
-        max_excerpt_length: int = 200
+        max_excerpt_length: int = 1000
     ) -> str:
         """
         Format results for console display.
@@ -424,33 +459,68 @@ class QueryProcessor:
         lines.append("=" * 80)
         lines.append("QUERY RESULTS")
         lines.append("=" * 80)
-        lines.append(f"Query: \"{results['query']}\"")
+
+        rewrite_info = results.get('metadata', {}).get('query_rewriting')
+
+        if rewrite_info:
+            original = rewrite_info.get('original_query', '')
+            rewritten = rewrite_info.get('rewritten_query', '')
+
+            if rewrite_info.get('rewrite_skipped'):
+                lines.append(f"Query: \"{original}\" [rewriting disabled]")
+            elif rewrite_info.get('rewrite_failed'):
+                lines.append(f"Query: \"{original}\" [rewrite failed, using original]")
+            elif original != rewritten:
+                lines.append(f"Query: \"{rewritten}\" [rewritten]")
+                lines.append(f"Original: \"{original}\"")
+            else:
+                lines.append(f"Query: \"{original}\"")
+        else:
+            lines.append(f"Query: \"{results['query']}\"")
+            lines.append("NB: Query rewriting not performed.")
+
+
         lines.append(f"Strategy: {results['strategy']}")
         lines.append(f"Results: {results['metadata']['total_results']}")
-        
+
         timing = results['metadata']['timing']
+
         lines.append(
             f"Time: {timing['total_time']}s "
             f"(embedding: {timing['embedding_time']}s, "
             f"retrieval: {timing['retrieval_time']}s)"
         )
-        
+
         if results['metadata'].get('strategies_queried'):
             strategies = ", ".join(results['metadata']['strategies_queried'])
             lines.append(f"Strategies queried: {strategies}")
-        
+
         lines.append("-" * 80)
-        
+
         # Display results
         if not results['results']:
             lines.append("\nNo results found.")
         else:
             for result in results['results']:
-                lines.append(f"\nRank {result['rank']} [{result['strategy']}] "
-                           f"(similarity: {result['similarity_score']:.4f})")
+                # Get strategy from result or top-level results dict
+                strategy = result.get('strategy', results.get('strategy', 'unknown'))
+
+                # Build score string showing available scores
+                score_parts = []
+                if 'rrf_score' in result:
+                    score_parts.append(f"rrf: {result['rrf_score']:.4f}")
+                if 'rerank_score' in result:
+                    score_parts.append(f"rerank: {result['rerank_score']:.4f}")
+                if 'similarity_score' in result and not score_parts:
+                    # Only show similarity if no hybrid/rerank scores
+                    score_parts.append(f"similarity: {result['similarity_score']:.4f}")
+
+                score_str = ", ".join(score_parts) if score_parts else "no score"
+
+                lines.append(f"\nRank {result['rank']} [{strategy}] ({score_str})")
                 lines.append(f"Doc: {result['doc_id']}")
                 lines.append(f"Chunk: {result['chunk_id']}")
-                
+
                 # Content display
                 content = result['content']
                 if show_full_content:
@@ -458,15 +528,15 @@ class QueryProcessor:
                 else:
                     excerpt = self._create_excerpt(content, max_excerpt_length)
                     lines.append(f"\n{excerpt}")
-                
+
                 lines.append("")  # Blank line between results
-        
+
         lines.append("-" * 80)
         lines.append(f"Retrieved {results['metadata']['total_results']} results")
         lines.append("=" * 80)
-        
+
         return "\n".join(lines)
-    
+
     def _create_excerpt(self, text: str, max_length: int) -> str:
         """
         Create an excerpt from text.

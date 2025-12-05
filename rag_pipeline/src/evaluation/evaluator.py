@@ -1,4 +1,4 @@
-"""Main evaluator orchestrating RAG system evaluation."""
+"""RAG system evaluation orchestration."""
 
 from __future__ import annotations
 from typing import List, Dict, Any, Optional

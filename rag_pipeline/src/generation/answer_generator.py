@@ -1,4 +1,4 @@
-"""Answer generator for RAG pipeline."""
+"""RAG answer generation orchestration."""
 
 from __future__ import annotations
 from typing import Dict, Any, Optional

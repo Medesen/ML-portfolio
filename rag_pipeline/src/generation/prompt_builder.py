@@ -25,23 +25,20 @@ Question: {query}
 
 Answer (with citations):"""
 
-    # Alternative template for more structured answers
-    STRUCTURED_TEMPLATE = """You are an expert on scikit-learn answering technical questions.
+    STRUCTURED_TEMPLATE = """
+    You are an expert on scikit-learn. Follow these rules:
+    1. Only answer based on the provided context
+    2. If the context doesn't contain the answer, say so clearly
+    3. Cite sources using [1], [2] format
+    4. Be concise but complete
+    5. Include code examples when relevant
+    Context from scikit-learn documentation:
 
-Below is relevant documentation to help answer the question. Use this information to provide an accurate, detailed answer.
+    {context}
 
-Guidelines:
-- Answer the question directly and concisely
-- Include code examples if relevant
-- Cite sources using [1], [2], etc. for each piece of information
-- If unsure or information is not in the context, say so clearly
+    Question: {query}
 
-Context from scikit-learn documentation:
-{context}
-
-Question: {query}
-
-Provide a clear, well-cited answer:"""
+    Provide a clear, well-cited answer:"""
 
     def __init__(self, template: str = None):
         """

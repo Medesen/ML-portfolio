@@ -22,6 +22,8 @@ from src.retrieval.indexer import Indexer
 from src.retrieval.query_processor import QueryProcessor
 from src.retrieval.embedder import Embedder
 from src.retrieval.vector_store import VectorStore
+from src.retrieval.bm25_index import BM25Index
+from src.retrieval.query_rewriter import QueryRewriter
 from src.generation.llm_client import OllamaClient
 from src.generation.prompt_builder import PromptBuilder
 from src.generation.answer_generator import AnswerGenerator
@@ -235,28 +237,92 @@ def cmd_query(args, config) -> None:
         )
         logger.debug("Vector store initialized successfully")
         
-        # Initialize query processor
+        # Initialize BM25 index for hybrid search
+        bm25_index = BM25Index(
+            persist_directory=vector_store_dir / "bm25",
+            logger_name="query_bm25_index"
+        )
+        logger.debug("BM25 index initialized")
+        
+        # Initialize query rewriter if enabled
+        query_rewriter = None
+        if config.get("query_rewriting.enabled", False):
+            # Initialize LLM client for query rewriting
+            ollama_url = config.get("generation.ollama_base_url", "http://ollama:11434")
+            model_name = config.get("generation.model", "llama3.2:3b")
+            timeout = config.get("query_rewriting.timeout", 30)
+            
+            rewrite_llm_client = OllamaClient(
+                base_url=ollama_url,
+                model=model_name,
+                timeout=timeout,
+                logger_name="query_rewrite_llm"
+            )
+            
+            query_rewriter = QueryRewriter(
+                llm_client=rewrite_llm_client,
+                config=config,
+                logger_name="query_rewriter"
+            )
+            logger.debug("Query rewriter initialized")
+        
+        # Initialize query processor with BM25 index and query rewriter
         query_processor = QueryProcessor(
             config=config,
             embedder=embedder,
             vector_store=vector_store,
+            bm25_index=bm25_index,
+            query_rewriter=query_rewriter,
             logger_name="query_processor"
         )
         
+        # Determine search mode
+        search_mode = args.search_mode or config.get("retrieval.search_mode", "hybrid")
+        use_hybrid = search_mode in ("hybrid", "keyword")
+        
+        # Get strategy from args or config
+        strategy = args.strategy or config.get("retrieval.strategy", "fixed")
+        
         # Process query
-        logger.debug("Processing query...")
-        results = query_processor.process_query(
-            query_text=args.query_text,
-            strategy=args.strategy,
-            top_k=args.top_k,
-            filters=None,  # Future: parse from args if needed
-            show_full_content=args.show_content
-        )
+        logger.debug(f"Processing query (mode={search_mode})...")
+        if use_hybrid:
+            # Load BM25 index for the strategy
+            if not bm25_index.load_index(strategy):
+                logger.warning(f"BM25 index not found for '{strategy}', falling back to semantic search")
+                search_mode = "semantic"
+                results = query_processor.process_query(
+                    query_text=args.query_text,
+                    strategy=strategy,
+                    top_k=args.top_k,
+                    show_full_content=args.show_content
+                )
+            else:
+                results = query_processor.process_query_hybrid(
+                    query_text=args.query_text,
+                    strategy=strategy,
+                    top_k=args.top_k,
+                    alpha=args.alpha,
+                    search_mode=search_mode
+                )
+        else:
+            results = query_processor.process_query(
+                query_text=args.query_text,
+                strategy=strategy,
+                top_k=args.top_k,
+                show_full_content=args.show_content
+            )
         logger.debug(f"Query returned {len(results.get('results', []))} results")
         
         # Generate answer if requested
         if args.generate:
             logger.info("Generating answer with LLM...")
+            
+            # First, display retrieval results (same as query-retrieve)
+            formatted_output = query_processor.format_console_output(
+                results,
+                show_full_content=args.show_content
+            )
+            print("\n" + formatted_output)
             
             try:
                 # Initialize LLM components
@@ -284,9 +350,12 @@ def cmd_query(args, config) -> None:
                     logger_name="query_answer_generator"
                 )
                 
+                # Get the query that was used for retrieval (may have been rewritten)
+                generation_query = results.get('query', args.query_text)
+                
                 # Generate answer from retrieval results
                 generation_result = answer_generator.generate_answer(
-                    query=args.query_text,
+                    query=generation_query,
                     retrieved_results=results["results"]
                 )
                 
@@ -475,9 +544,9 @@ def main() -> None:
     )
     index_parser.add_argument(
         "--strategy",
-        choices=["fixed", "semantic", "hierarchical", "all"],
+        choices=["fixed", "semantic", "hierarchical"],
         default=None,
-        help="Chunking strategy to use (default: all enabled strategies)",
+        help="Chunking strategy to index (default: all enabled strategies)",
     )
     index_parser.add_argument(
         "--force",
@@ -496,9 +565,9 @@ def main() -> None:
     )
     query_parser.add_argument(
         "--strategy",
-        choices=["fixed", "semantic", "hierarchical", "all"],
+        choices=["fixed", "semantic", "hierarchical"],
         default=None,
-        help="Chunking strategy to query (default: all from config)",
+        help="Chunking strategy to query (default: from config)",
     )
     query_parser.add_argument(
         "--top-k",
@@ -517,6 +586,19 @@ def main() -> None:
         action="store_true",
         dest="show_content",
         help="Display full chunk content (default: show excerpts)",
+    )
+    query_parser.add_argument(
+        "--search-mode",
+        choices=["semantic", "keyword", "hybrid"],
+        dest="search_mode",
+        default=None,
+        help="Search mode (default: from config, typically 'hybrid')",
+    )
+    query_parser.add_argument(
+        "--alpha",
+        type=float,
+        default=None,
+        help="Hybrid search alpha weight for semantic (0.0-1.0). Only used with hybrid mode.",
     )
     query_parser.add_argument(
         "--generate",

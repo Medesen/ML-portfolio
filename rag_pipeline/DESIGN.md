@@ -452,6 +452,17 @@ This demonstrates testing ability without being exhaustive.
 
 This section acknowledges that portfolio projects and production systems have different requirements.
 
+### Performance Considerations
+
+**Embedding Model Loading:**
+The current CLI implementation loads the embedding model fresh for each query command. 
+This adds ~1-2 seconds of startup overhead per query. For production deployments:
+- Implement a server mode that keeps the model in memory
+- Use a model server (e.g., Triton, TensorFlow Serving)
+- Or pre-warm the model in a long-running process
+
+**Current behavior:** Acceptable for CLI/batch usage, not suitable for low-latency API serving.
+
 ### Infrastructure Changes
 
 | Component | Portfolio | Production | Reason |

@@ -183,7 +183,7 @@ class RetrievalMetrics:
             metrics[f"ndcg@{k}"] = self.ndcg_at_k(retrieved_doc_ids, relevant_doc_ids, k)
         
         return metrics
-    
+
     def average_metrics(
         self,
         metrics_list: List[Dict[str, float]]
@@ -208,11 +208,14 @@ class RetrievalMetrics:
         # Calculate averages
         averaged = {}
         for metric_name in metric_names:
-            values = [m.get(metric_name, 0.0) for m in metrics_list]
-            averaged[metric_name] = sum(values) / len(values)
+            values = [m.get(metric_name, 0.0) for m in metrics_list if metric_name in m]
+            if values:  # Only compute if we have actual values
+                averaged[metric_name] = sum(values) / len(values)
+            else:
+                averaged[metric_name] = 0.0  # Or you could skip this metric entirely
         
         return averaged
-    
+
     def topic_coverage(
         self,
         retrieved_chunks: List[Dict[str, Any]],

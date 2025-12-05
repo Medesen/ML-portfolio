@@ -26,9 +26,9 @@ This document describes the complete architecture of the RAG Pipeline system, in
 ┌──────────────────────────────────────────────────────────────────────┐
 │                         RAG PIPELINE SYSTEM                          │
 │                                                                      │
-│  INPUT: Scikit-learn HTML Docs (416 files)                         │
+│  INPUT: Scikit-learn HTML Docs (420 files)                         │
 │         ↓                                                           │
-│  [1] PREPROCESSING → Structured JSON (416 files, ~4 MB)           │
+│  [1] PREPROCESSING → Structured JSON (420 files, ~4 MB)           │
 │         ↓                                                           │
 │  [2] CHUNKING → 3 Strategies → 4006 Total Chunks                  │
 │         ├─ Fixed: 1595 chunks (512 tokens, 50 overlap)            │
@@ -65,9 +65,9 @@ This document describes the complete architecture of the RAG Pipeline system, in
 ### Detailed Pipeline Flow
 
 ```
-Raw HTML (416 docs)
+Raw HTML (420 docs)
     ↓ [ITERATION 1: Preprocessing]
-Structured JSON (416 files, ~4 MB)
+Structured JSON (420 files, ~4 MB)
     ├─ doc_id, title, content, doc_type
     └─ metadata (sections, file_size, etc.)
     ↓ [ITERATION 2: Chunking]
@@ -317,7 +317,7 @@ rag_pipeline/
 ├── data/
 │   ├── corpus/                    # [Tracked in Git]
 │   │   └── scikit-learn-1.7.2-docs/
-│   │       └── 416 HTML files
+│   │       └── 420 HTML files
 │   │
 │   ├── processed/                 # [Generated, gitignored]
 │   │   ├── api/
@@ -398,12 +398,12 @@ Collections are independent - allows querying single or multiple strategies.
 ### Component Performance (CPU, Intel i7/similar)
 
 **Preprocessing:**
-- 416 HTML files → JSON
+- 420 HTML files → JSON
 - Time: ~35 seconds
 - Throughput: ~12 files/second
 
 **Chunking:**
-- 416 docs → 4006 chunks
+- 420 docs → 4006 chunks
 - Time: ~5-10 seconds total
 - Breakdown: Fixed (3s), Semantic (2s), Hierarchical (4s)
 
@@ -425,7 +425,7 @@ Collections are independent - allows querying single or multiple strategies.
 
 ### Scalability Projections
 
-**Current scale** (416 docs, 4006 chunks):
+**Current scale** (420 docs, 4006 chunks):
 - Query latency: ~1.2s
 - Memory: ~500 MB
 
@@ -452,7 +452,7 @@ Collections are independent - allows querying single or multiple strategies.
   "pruning_timestamp": "2025-10-19T20:28:15.123456",
   "processing_completed": true,
   "processing_timestamp": "2025-10-19T20:28:30.789012",
-  "files_processed": 416,
+  "files_processed": 420,
   "files_by_type": {
     "api": 251,
     "guide": 46,
@@ -468,7 +468,7 @@ Collections are independent - allows querying single or multiple strategies.
   "fixed": {
     "indexed": true,
     "chunk_count": 1595,
-    "doc_count": 416,
+    "doc_count": 420,
     "timestamp": "2025-10-19T20:28:45.123456"
   },
   "semantic": { ... },

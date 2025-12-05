@@ -4,7 +4,7 @@
 # PHONY targets are not actual files - they're just command names
 # This tells Make to always run these commands, even if a file with that name exists
 .PHONY: help setup clean build test test-cov test-file \
-        preprocess index query eval \
+        preprocess index query eval benchmark \
         up down logs shell \
         clean-docker clean-data clean-all
 
@@ -26,10 +26,12 @@ help:
 	@echo "  make test-file F=<file> - Run specific test file (e.g., F=test_config.py)"
 	@echo ""
 	@echo "RAG Pipeline Operations:"
-	@echo "  make preprocess     - Preprocess corpus (416 documents)"
+	@echo "  make preprocess     - Preprocess corpus (420 documents)"
 	@echo "  make index          - Build vector index (all strategies)"
-	@echo "  make query Q=\"...\" - Query the system (use --generate for LLM answer)"
+	@echo "  make query Q=\"...\" - Query the system and generate answer"
+	@echo "  make query-retrieval Q=\"...\" - Retrieval only (no LLM, for debugging)"
 	@echo "  make eval           - Run evaluation framework"
+	@echo "  make benchmark      - Benchmark reranking overfetch values"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make logs           - Show Ollama service logs"
@@ -44,7 +46,7 @@ help:
 	@echo "Examples:"
 	@echo "  make setup"
 	@echo "  make query Q=\"How do I use StandardScaler?\""
-	@echo "  make query Q=\"What is PCA?\" ARGS=\"--generate --strategy fixed\""
+	@echo "  make query Q=\"What is PCA?\" ARGS=\"--strategy fixed --top-k 5\""
 	@echo "  make test-file F=test_metrics.py"
 	@echo ""
 
@@ -105,26 +107,26 @@ index-force:
 	@echo "Force rebuilding vector index..."
 	@docker compose run --rm rag-pipeline index --force
 
-# Query with optional arguments
+# Query with answer generation (default behavior)
 # Usage: make query Q="How do I use StandardScaler?"
-# With args: make query Q="What is PCA?" ARGS="--generate --strategy fixed"
+# With args: make query Q="What is PCA?" ARGS="--strategy fixed --top-k 5"
 query:
 ifndef Q
 	@echo "Error: Please provide a query using Q=\"your question\""
 	@echo "Example: make query Q=\"How do I use StandardScaler?\""
-	@echo "With options: make query Q=\"What is PCA?\" ARGS=\"--generate --top-k 10\""
-	@exit 1
-endif
-	@docker compose run --rm rag-pipeline query "$(Q)" $(ARGS)
-
-# Shortcut for query with generation
-query-gen:
-ifndef Q
-	@echo "Error: Please provide a query using Q=\"your question\""
-	@echo "Example: make query-gen Q=\"How do I use StandardScaler?\""
+	@echo "With options: make query Q=\"What is PCA?\" ARGS=\"--strategy fixed --top-k 10\""
 	@exit 1
 endif
 	@docker compose run --rm rag-pipeline query "$(Q)" --generate $(ARGS)
+
+# Retrieval-only query (for debugging, no LLM generation)
+query-retrieve:
+ifndef Q
+	@echo "Error: Please provide a query using Q=\"your question\""
+	@echo "Example: make query-retrieve Q=\"How do I use StandardScaler?\""
+	@exit 1
+endif
+	@docker compose run --rm rag-pipeline query "$(Q)" $(ARGS)
 
 # Run evaluation
 eval:
@@ -134,6 +136,14 @@ eval:
 eval-quick:
 	@echo "Running quick evaluation (5 questions)..."
 	@docker compose run --rm rag-pipeline evaluate --max-questions 5 --report
+
+# Benchmark reranking overfetch values
+# Usage: make benchmark
+# With args: make benchmark ARGS="--overfetch-values 30 50 60"
+# Or: make benchmark ARGS="--strategy fixed --max-questions 10"
+benchmark:
+	@echo "Running reranking overfetch benchmark..."
+	@docker compose run --rm rag-pipeline python scripts/benchmark_overfetch.py $(ARGS)
 
 # =============================================================================
 # Utilities

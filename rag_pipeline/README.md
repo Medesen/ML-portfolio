@@ -5,11 +5,14 @@ A RAG (Retrieval-Augmented Generation) system built to compare chunking strategi
 ## Summary
 
 **Domain:** Technical documentation Q&A (scikit-learn docs)  
-**Corpus:** 416 HTML documents from scikit-learn 1.7.2  
+**Corpus:** 420 HTML documents from scikit-learn 1.7.2  
 **Implementation:** Three chunking strategies with comparative evaluation  
 **Key Finding:** Fixed chunking achieved the highest retrieval performance (Recall@10: 0.51, MRR: 0.51)  
-**Tech Stack:** ChromaDB, sentence-transformers, Ollama (Llama 3.2), Docker  
-**Setup Time:** Approximately 10 minutes for complete environment
+**Tech Stack:** ChromaDB, sentence-transformers, BM25, Ollama (Llama 3.2), Docker  
+**Setup Time:** Approximately 10 minutes for complete environment  
+**Search Modes:** Hybrid (BM25 + semantic), semantic-only, keyword-only  
+**Query Enhancement:** LLM-based query rewriting with caching  
+**Reranking:** Cross-encoder reranking for improved retrieval precision
 
 **Evaluation Results:**
 | Strategy | Recall@10 | MRR | NDCG@10 |
@@ -48,7 +51,7 @@ Based on this analysis, I recommend fixed chunking for technical documentation r
 
 2. **Use PowerShell script for setup, then Docker commands**:
    - Use `.\setup.ps1` for initial setup (works out of the box, no tools needed)
-   - For all other commands, use [Direct Docker Commands](#direct-docker-commands-advanced) shown later in this README
+   - For all other commands, see the Makefile for equivalent `docker compose` commands
    - Example: Instead of `make query Q="..."`, use `docker compose run --rm rag-pipeline query "..."`
 
 3. **Use Git Bash or WSL2** (includes Make pre-installed):
@@ -94,7 +97,7 @@ make setup
 1. Builds Docker containers (~2-3 min)
 2. Starts Ollama LLM service
 3. Downloads Llama 3.2 model (~2GB)
-4. Preprocesses 416 documents (~30 sec)
+4. Preprocesses 420 documents (~30 sec)
 5. Builds vector index with 3 strategies (~90 sec)
 
 ### Try It Out
@@ -110,7 +113,12 @@ make query-gen Q="How do I use StandardScaler?"
 
 # More examples
 make query-gen Q="What is PCA?"
-make query Q="How to handle missing values?" ARGS="--strategy fixed --generate"
+make query-gen Q="How to handle missing values?" ARGS="--strategy fixed"
+
+# Hybrid search (combines BM25 keyword + semantic search)
+make query Q="fit_transform preprocessing" ARGS="--search-mode hybrid"
+make query Q="cross-validation" ARGS="--search-mode keyword"  # BM25 only
+make query Q="feature scaling" ARGS="--search-mode semantic"  # Embeddings only
 
 # Run full evaluation (tests all 3 strategies on 35 questions, takes ~45 min)
 make eval
@@ -124,7 +132,7 @@ Run `make help` to see all available commands.
 
 ### Technical Skills
 
-I evaluated three chunking strategies using standard IR metrics (Recall@k, MRR, NDCG) across 35 test questions. Fixed chunking performed best for technical documentation, likely due to the structured nature of API docs. The system handles state management with JSON tracking files, uses YAML-based configuration for all parameters, and implements proper logging throughout.
+I evaluated three chunking strategies using standard IR metrics (Recall@k, MRR, NDCG) across 35 test questions. The system handles state management with JSON tracking files, uses YAML-based configuration for all parameters, and implements proper logging throughout.
 
 I built the system with modular components: the architecture separates preprocessing, chunking, retrieval, and generation into distinct modules with clear interfaces (e.g., abstract `BaseChunker` class). All functions include type hints, and the codebase uses dependency injection for testability.
 
@@ -133,6 +141,10 @@ The deployment uses Docker Compose to orchestrate Ollama and the RAG pipeline. E
 ### Key Technical Decisions
 
 **Chunking comparison:** Rather than assume one approach is best, I implemented three strategies and measured their performance empirically. The evaluation showed fixed chunking winning, which makes sense for highly structured documentation where semantic boundaries don't necessarily align with information boundaries.
+
+**Hybrid search:** I implemented Reciprocal Rank Fusion (RRF) to combine BM25 keyword search with semantic embeddings. This addresses the weakness of pure semantic search on exact technical terms (e.g., "fit_transform", "GridSearchCV"). The alpha parameter (default 0.7) controls the balance: 70% semantic, 30% keyword. BM25 tokenization uses Porter stemming and stopword removal for better term matching.
+
+**Query rewriting:** Before retrieval, queries are rewritten by the LLM to improve search quality. The rewriter clarifies ambiguous phrases, expands abbreviations (e.g., "PCA" → "Principal Component Analysis PCA"), adds relevant sklearn synonyms, and removes conversational filler. Results are cached to avoid redundant LLM calls. If rewriting fails, the system gracefully falls back to the original query.
 
 **Local LLM trade-off:** I chose Ollama with Llama 3.2 over cloud APIs. This means slower inference (~2-3s vs ~0.5s) and lower quality answers, but it eliminates API costs and makes the project completely reproducible for anyone who clones it.
 
@@ -158,9 +170,9 @@ The deployment uses Docker Compose to orchestrate Ollama and the RAG pipeline. E
 
 ### Unit Tests
 
-The project includes 18 unit tests (21% coverage) demonstrating testing patterns for core components: configuration loading, chunking strategies, evaluation metrics, and embedder functionality. The systematic evaluation framework (35 test questions with IR metrics) serves as the primary validation mechanism for end-to-end behavior.
+The project includes 93 unit tests demonstrating testing patterns for core components: configuration loading, chunking strategies, evaluation metrics, embedder functionality, hybrid search (BM25, RRF fusion, alpha weighting), query rewriting (LLM integration, caching, fallback behavior), and cross-encoder reranking (score reordering, fallback behavior, timing metadata). The systematic evaluation framework (35 test questions with IR metrics) serves as the primary validation mechanism for end-to-end behavior.
 
-**Test Results:** All 18 tests passing | 21% code coverage
+**Test Results:** All 85 tests passing
 
 **Production considerations:** This test suite demonstrates patterns but is not exhaustive. For production, I would add comprehensive edge case testing, integration tests, performance tests, mocked external dependencies, and CI/CD integration.
 
@@ -196,7 +208,7 @@ docker compose run --rm --entrypoint pytest rag-pipeline tests/ -v [OPTIONS]
 
 ```
 rag_pipeline/
-├── src/                    # Source code (27 Python modules)
+├── src/                    # Source code (31 Python modules)
 │   ├── preprocessing/      # HTML → JSON conversion
 │   ├── chunking/          # 3 chunking strategies
 │   ├── retrieval/         # Embeddings, vector store, query processing
@@ -204,7 +216,7 @@ rag_pipeline/
 │   ├── evaluation/        # Metrics, test loader, results analysis
 │   └── utils/             # Config, logging
 ├── data/
-│   ├── corpus/            # Scikit-learn HTML docs (416 files, tracked in git)
+│   ├── corpus/            # Scikit-learn HTML docs (420 files, tracked in git)
 │   ├── evaluation/        # Test set (35 Q&A pairs, tracked)
 │   ├── processed/         # Generated JSON (gitignored)
 │   ├── state/             # State tracking (gitignored)
@@ -226,7 +238,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design.
 ## Domain & Dataset
 
 **Domain:** Technical documentation Q&A  
-**Dataset:** Scikit-learn 1.7.2 documentation (416 documents)
+**Dataset:** Scikit-learn 1.7.2 documentation (420 documents)
 
 **Corpus composition:**
 - API documentation: 251 files (60.3%)
@@ -253,11 +265,12 @@ make test               # Run all unit tests
 make test-cov           # Tests with coverage report
 
 # Core operations
-make preprocess         # Process corpus (416 documents)
+make preprocess         # Process corpus (420 documents)
 make index              # Build vector index (3 strategies)
 make query Q="..."      # Query the system
 make query-gen Q="..."  # Query with LLM answer
 make eval               # Run evaluation framework
+make eval-quick         # Quick evaluation (5 questions)
 
 # Utilities
 make status             # Show project status
@@ -285,10 +298,14 @@ make query Q="preprocessing" ARGS="--show-content"
 make query Q="feature scaling" ARGS="--output results.json"
 
 # Query with generation and strategy
-make query Q="How to handle missing values?" ARGS="--generate --strategy semantic"
+make query-gen Q="How to handle missing values?" ARGS="--strategy semantic"
 
 # Tip: Use --strategy to override the default in config.yaml on the fly
 make query Q="NearestNeighbors usage" ARGS="--strategy hierarchical"
+
+# Hybrid search with alpha tuning (0.0-1.0)
+make query Q="StandardScaler" ARGS="--search-mode hybrid --alpha 0.5"  # Equal weight
+make query Q="fit_transform" ARGS="--search-mode keyword"  # Pure BM25 for exact terms
 ```
 
 ### Evaluation Examples
@@ -299,6 +316,10 @@ make eval
 
 # Quick test with limited questions
 make eval-quick         # Tests with 5 questions
+
+# Benchmark reranking overfetch values (tests latency vs quality trade-off)
+make benchmark ARGS="--overfetch-values 30 50 60"
+make benchmark ARGS="--strategy fixed --max-questions 10"
 
 # Results saved to: data/evaluation/results/
 ```
@@ -320,21 +341,6 @@ make index-force
 make clean-all
 ```
 
-### Direct Docker Commands (Advanced)
-
-For Windows users without Make, or if you prefer Docker commands directly:
-
-```bash
-# Core pipeline operations (these are what the Makefile runs internally)
-docker compose run --rm rag-pipeline preprocess    # Process HTML corpus to JSON
-docker compose run --rm rag-pipeline index         # Build vector indices
-docker compose run --rm rag-pipeline query "QUESTION" --generate  # Query with answer generation
-docker compose run --rm rag-pipeline evaluate --report  # Run evaluation framework
-
-# Tests require overriding the entrypoint
-docker compose run --rm --entrypoint pytest rag-pipeline tests/ -v
-```
-
 ---
 
 ## Configuration
@@ -345,7 +351,7 @@ Edit `config/config.yaml` to customize:
 # Chunking strategies
 chunking:
   fixed:
-    chunk_size: 512  # tokens
+    chunk_size: 512  # tokens (~384 words)
     overlap: 50
   semantic:
     max_chunk_size: 1000  # words
@@ -354,20 +360,41 @@ chunking:
 
 # Embedding model (easy to swap!)
 embeddings:
-  model: "all-MiniLM-L6-v2"  # or "all-mpnet-base-v2"
+  model: "all-MiniLM-L6-v2"
   device: "cpu"  # or "cuda" for GPU
 
 # LLM model (easy to swap!)
 generation:
   model: "llama3.2:3b"  # or "llama3.1:8b", "mistral:7b"
-  temperature: 0.7
+  temperature: 0.3
   max_tokens: 256
 
 # Retrieval settings
 retrieval:
   top_k: 20
-  strategy: "all"  # or "fixed", "semantic", "hierarchical"
-  merge_strategy: "interleave"  # or "top_scores"
+  strategy: "fixed"  # or "semantic", "hierarchical"
+  search_mode: "hybrid"  # or "semantic", "keyword"
+  hybrid_alpha: 0.7  # 1.0 = pure semantic, 0.0 = pure keyword
+  rrf_k: 60  # RRF dampening factor
+  overfetch_factor: 3  # Fetch 3x candidates before fusion
+
+# Query rewriting (LLM-based query enhancement)
+query_rewriting:
+  enabled: true  # Enable query rewriting before retrieval
+  temperature: 0.3  # Low for deterministic rewrites
+  max_tokens: 100  # Max tokens for rewritten query
+  timeout: 30  # Timeout in seconds (falls back to original query on failure)
+  cache_size: 128  # Cache repeated queries
+
+# Cross-encoder reranking (improves retrieval precision)
+reranking:
+  enabled: true  # Enable cross-encoder reranking
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # HuggingFace model
+  overfetch_k: 50  # Retrieve this many before reranking
+  final_top_k: 10  # Return this many after reranking
+  batch_size: 32  # Batch size for scoring
+  device: "cpu"  # or "cuda" for GPU
+  # Note: First reranking call may be slower due to model loading
 ```
 
 ---
@@ -390,14 +417,13 @@ retrieval:
 
 **Iteration 5: Evaluation Framework**
 - 35-question test set, retrieval metrics, comparative analysis
-- Key finding: Fixed chunking wins for technical documentation
 
 ### Potential Future Enhancements
 
-- Hybrid search (dense + BM25)
-- Reranking with cross-encoders
+- ~~Hybrid search (dense + BM25)~~ ✅ Implemented with RRF fusion
+- ~~Query rewriting/expansion~~ ✅ Implemented with LLM + caching
+- ~~Reranking with cross-encoders~~ ✅ Implemented with ms-marco-MiniLM
 - Streamlit UI
-- Query expansion
 
 ---
 
@@ -515,7 +541,7 @@ The Dockerfile is configured to use `UID=1000` and `GID=1000` by default (typica
 **Windows-specific issues**
 - Ensure Docker Desktop is using WSL2 backend
 - For `make` commands: Use Git Bash or WSL2 (includes Make)
-- For PowerShell users: Use `setup.ps1` and [Direct Docker Commands](#direct-docker-commands-advanced)
+- For PowerShell users: Use `setup.ps1` for setup, then see Makefile for equivalent Docker commands
 - See [Platform-Specific Notes](#platform-specific-notes) for details
 
 ### Application Issues
@@ -576,7 +602,7 @@ See detailed troubleshooting in:
 
 ### What about unit tests?
 
-See the [Testing](#testing) section above. The project includes 18 unit tests demonstrating patterns for core components, with the systematic evaluation framework (35 test questions with IR metrics) serving as the primary end-to-end validation.
+See the [Testing](#testing) section above. The project includes 93 unit tests demonstrating patterns for core components, with the systematic evaluation framework (35 test questions with IR metrics) serving as the primary end-to-end validation.
 
 ### What would you change for production?
 
@@ -618,7 +644,7 @@ Yes. Docker Desktop works on all three platforms:
 - **macOS:** Docker Desktop includes everything needed + Make pre-installed
 - **Windows:** Docker Desktop with WSL2 backend. Make not included by default.
 
-**Windows users:** See [Platform-Specific Notes](#platform-specific-notes) at the top for three setup options. The short version: either install Make via `choco install make`, or use the [Direct Docker Commands](#direct-docker-commands-advanced) instead of `make` commands.
+**Windows users:** See [Platform-Specific Notes](#platform-specific-notes) at the top for three setup options. The short version: either install Make via `choco install make`, or see the Makefile for equivalent `docker compose` commands.
 
 ### How much does the evaluation cost?
 
@@ -669,6 +695,6 @@ See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Last Updated:** October 2025  
+**Last Updated:** December 2025  
 **Docker Support:** Linux, macOS, Windows  
 **Total Setup Time:** ~10 minutes

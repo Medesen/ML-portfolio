@@ -1,4 +1,4 @@
-"""Embedding generation wrapper for sentence transformers."""
+"""Embedding generation using sentence-transformers."""
 
 from __future__ import annotations
 from typing import List, Union, Dict, Any

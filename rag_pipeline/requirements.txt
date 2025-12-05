@@ -14,7 +14,8 @@ sentence-transformers>=2.2.0
 torch>=2.0.0  # Required by sentence-transformers
 
 # Retrieval and search
-# rank-bm25>=0.2.2
+rank-bm25>=0.2.2
+nltk>=3.8  # For stemming and stopword removal in BM25
 
 # LLM integration (Iteration 4)
 requests>=2.31.0  # For Ollama API calls

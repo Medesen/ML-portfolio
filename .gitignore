@@ -227,6 +227,7 @@ rag_pipeline/logs/
 rag_pipeline/QnA_pedantic_hiring_manager_(ClaudeSonnet4.5).txt
 rag_pipeline/project_analysis.txt
 rag_pipeline/SUMMARY.txt
+rag_pipeline/rag_pipeline_backup_2025-11-21_before_major_revision/
 
 # Generated files from churn prediction project should not be tracked
 # end2end_churn uses Docker only (no venv needed)

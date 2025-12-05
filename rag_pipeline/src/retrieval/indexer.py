@@ -11,6 +11,7 @@ from ..utils.logger import get_logger
 from ..chunking import FixedSizeChunker, SemanticChunker, HierarchicalChunker, Chunk
 from .embedder import Embedder
 from .vector_store import VectorStore
+from .bm25_index import BM25Index
 
 
 class IndexingStateTracker:
@@ -41,7 +42,8 @@ class IndexingStateTracker:
     def _empty_state(self) -> Dict:
         """Return empty state structure."""
         return {
-            "strategies": {}  # strategy_name -> {completed, timestamp, chunk_count, doc_count}
+            "strategies": {},  # strategy_name -> {completed, timestamp, chunk_count, doc_count}
+            "bm25_strategies": {}  # strategy_name -> {completed, timestamp, chunk_count}
         }
     
     def save_state(self):
@@ -93,6 +95,38 @@ class IndexingStateTracker:
         
         return True
     
+    def is_bm25_indexed(self, strategy_name: str, bm25_index: "BM25Index") -> bool:
+        """
+        Check if BM25 index has been built for a strategy.
+        
+        Args:
+            strategy_name: Name of the chunking strategy
+            bm25_index: BM25Index instance for validation
+            
+        Returns:
+            True if BM25 indexed and validated, False otherwise
+        """
+        # Ensure bm25_strategies key exists (for backward compatibility)
+        if "bm25_strategies" not in self.state:
+            self.state["bm25_strategies"] = {}
+        
+        # Check if state says it's complete
+        if strategy_name not in self.state["bm25_strategies"]:
+            return False
+        
+        bm25_state = self.state["bm25_strategies"][strategy_name]
+        if not bm25_state.get("completed", False):
+            return False
+        
+        # Validate that BM25 index files exist
+        if bm25_index and not bm25_index.index_exists(strategy_name):
+            # Index files don't exist - mark as incomplete
+            self.state["bm25_strategies"][strategy_name]["completed"] = False
+            self.save_state()
+            return False
+        
+        return True
+    
     def mark_strategy_completed(
         self, strategy_name: str, chunk_count: int, doc_count: int
     ):
@@ -102,6 +136,19 @@ class IndexingStateTracker:
             "timestamp": datetime.utcnow().isoformat(),
             "chunk_count": chunk_count,
             "doc_count": doc_count,
+        }
+        self.save_state()
+    
+    def mark_bm25_completed(self, strategy_name: str, chunk_count: int):
+        """Mark BM25 index as built for a strategy."""
+        # Ensure bm25_strategies key exists
+        if "bm25_strategies" not in self.state:
+            self.state["bm25_strategies"] = {}
+        
+        self.state["bm25_strategies"][strategy_name] = {
+            "completed": True,
+            "timestamp": datetime.utcnow().isoformat(),
+            "chunk_count": chunk_count,
         }
         self.save_state()
     
@@ -115,6 +162,9 @@ class IndexingStateTracker:
         if strategy_name:
             if strategy_name in self.state["strategies"]:
                 del self.state["strategies"][strategy_name]
+            # Also reset BM25 state for this strategy
+            if "bm25_strategies" in self.state and strategy_name in self.state["bm25_strategies"]:
+                del self.state["bm25_strategies"][strategy_name]
         else:
             self.state = self._empty_state()
         self.save_state()
@@ -143,6 +193,10 @@ class Indexer:
         # Initialize components
         self.embedder = None  # Lazy initialization
         self.vector_store = VectorStore(self.vector_store_dir, logger_name="vector_store")
+        self.bm25_index = BM25Index(
+            persist_directory=self.vector_store_dir / "bm25",
+            logger_name="bm25_index"
+        )
         self.state_tracker = IndexingStateTracker(self.state_file, self.vector_store_dir)
         
         # Initialize chunkers
@@ -152,26 +206,47 @@ class Indexer:
         """Initialize chunking strategies based on config."""
         chunkers = {}
         
+        strategies_config = self.config.get("chunking.strategies", {})
+        
+        if not strategies_config:
+            self.logger.warning(
+                "No chunking strategies found in config at 'chunking.strategies'. "
+                "Indexing will not process any documents."
+            )
+            return chunkers
+        
         # Fixed-size chunker
-        if self.config.get("chunking.strategies.fixed.enabled", False):
-            fixed_config = self.config.get("chunking.strategies.fixed", {})
+        fixed_config = strategies_config.get("fixed", {})
+        if fixed_config.get("enabled", False):
             chunkers["fixed"] = FixedSizeChunker(fixed_config)
             self.logger.info("Fixed-size chunker enabled")
+        elif "fixed" in strategies_config:
+            self.logger.info("Fixed-size chunker configured but not enabled")
         
         # Semantic chunker
-        if self.config.get("chunking.strategies.semantic.enabled", False):
-            semantic_config = self.config.get("chunking.strategies.semantic", {})
+        semantic_config = strategies_config.get("semantic", {})
+        if semantic_config.get("enabled", False):
             chunkers["semantic"] = SemanticChunker(semantic_config)
             self.logger.info("Semantic chunker enabled")
+        elif "semantic" in strategies_config:
+            self.logger.info("Semantic chunker configured but not enabled")
         
         # Hierarchical chunker
-        if self.config.get("chunking.strategies.hierarchical.enabled", False):
-            hierarchical_config = self.config.get("chunking.strategies.hierarchical", {})
+        hierarchical_config = strategies_config.get("hierarchical", {})
+        if hierarchical_config.get("enabled", False):
             chunkers["hierarchical"] = HierarchicalChunker(hierarchical_config)
             self.logger.info("Hierarchical chunker enabled")
+        elif "hierarchical" in strategies_config:
+            self.logger.info("Hierarchical chunker configured but not enabled")
+        
+        if not chunkers:
+            self.logger.warning(
+                "No chunking strategies are enabled. "
+                "Set 'enabled: true' for at least one strategy in config."
+            )
         
         return chunkers
-    
+
     def _get_embedder(self) -> Embedder:
         """Lazy initialization of embedder."""
         if self.embedder is None:
@@ -278,6 +353,14 @@ class Indexer:
             embedding_dimension=embedding_dim
         )
         
+        # Build BM25 index
+        if not self.state_tracker.is_bm25_indexed(strategy_name, self.bm25_index):
+            self.logger.info(f"Building BM25 index for strategy '{strategy_name}'...")
+            self.bm25_index.build_index(chunks_with_embeddings, strategy_name)
+            self.state_tracker.mark_bm25_completed(strategy_name, len(all_chunks))
+        else:
+            self.logger.info(f"BM25 index for '{strategy_name}' already exists (skipping)")
+        
         # Mark as completed
         self.state_tracker.mark_strategy_completed(
             strategy_name, len(all_chunks), len(documents)
@@ -291,6 +374,7 @@ class Indexer:
     def _load_documents(self) -> List[Dict]:
         """Load all processed documents."""
         documents = []
+        failed_files = []
         
         # Walk through all processed JSON files
         for json_file in self.processed_dir.rglob("*.json"):
@@ -300,6 +384,14 @@ class Indexer:
                     documents.append(doc)
             except Exception as e:
                 self.logger.warning(f"Failed to load {json_file}: {e}")
+                failed_files.append(str(json_file))
+        
+        # Log summary of failures
+        if failed_files:
+            self.logger.warning(
+                f"Failed to load {len(failed_files)} of {len(documents) + len(failed_files)} files. "
+                f"First few failures: {failed_files[:5]}"
+            )
         
         return documents
     
@@ -307,6 +399,7 @@ class Indexer:
         """Get indexing statistics."""
         stats = {
             "vector_store": self.vector_store.get_stats(),
+            "bm25_index": self.bm25_index.get_stats(),
             "strategies": {},
         }
         
@@ -314,15 +407,23 @@ class Indexer:
             is_indexed = self.state_tracker.is_strategy_indexed(
                 strategy_name, self.vector_store
             )
+            is_bm25_indexed = self.state_tracker.is_bm25_indexed(
+                strategy_name, self.bm25_index
+            )
             strategy_state = self.state_tracker.state.get("strategies", {}).get(
+                strategy_name, {}
+            )
+            bm25_state = self.state_tracker.state.get("bm25_strategies", {}).get(
                 strategy_name, {}
             )
             
             stats["strategies"][strategy_name] = {
                 "indexed": is_indexed,
+                "bm25_indexed": is_bm25_indexed,
                 "chunk_count": strategy_state.get("chunk_count", 0),
                 "doc_count": strategy_state.get("doc_count", 0),
                 "timestamp": strategy_state.get("timestamp"),
+                "bm25_timestamp": bm25_state.get("timestamp"),
             }
         
         return stats

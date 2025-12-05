@@ -1,4 +1,4 @@
-"""Vector store wrapper for ChromaDB."""
+"""ChromaDB vector database wrapper."""
 
 from __future__ import annotations
 from typing import List, Dict, Any, Optional
@@ -170,7 +170,15 @@ class VectorStore:
             where: Metadata filter (e.g., {"doc_type": "guide"})
             
         Returns:
-            Dictionary with results
+            Dictionary with ChromaDB query results in the format:
+            {
+                'ids': [[str, ...]],        # List of list of chunk IDs
+                'documents': [[str, ...]],   # List of list of content strings
+                'metadatas': [[dict, ...]], # List of list of metadata dicts
+                'distances': [[float, ...]] # List of list of L2 distances
+            }
+            Note: Outer list is for multiple queries; we always query one at a time,
+            so results are accessed as results['ids'][0], results['documents'][0], etc.
         """
         try:
             collection = self.client.get_collection(collection_name)

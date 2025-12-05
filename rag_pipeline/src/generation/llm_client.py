@@ -1,4 +1,4 @@
-"""LLM client for Ollama integration."""
+"""Ollama LLM client implementation."""
 
 from __future__ import annotations
 from typing import Dict, Any, Optional, List
@@ -19,7 +19,7 @@ class OllamaClient:
     
     def __init__(
         self,
-        base_url: str = "http://host.docker.internal:11434",
+        base_url: str = "http://ollama:11434",
         model: str = "llama3.2:3b",
         timeout: int = 60,
         logger_name: str = "ollama_client"
@@ -28,7 +28,9 @@ class OllamaClient:
         Initialize Ollama client.
         
         Args:
-            base_url: Ollama API base URL (use host.docker.internal for Docker)
+            base_url: Ollama API base URL. Default assumes Docker Compose setup
+                      where the Ollama service is named 'ollama'. For local development
+                      outside Docker, use 'http://localhost:11434'.
             model: Model name (e.g., "llama3.2:3b", "llama3.1:8b", "mistral")
             timeout: Request timeout in seconds
             logger_name: Logger name

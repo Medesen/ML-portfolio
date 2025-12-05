@@ -59,24 +59,34 @@ retrieval:
   vector_db: "chroma"
   top_k: 20  # Default number of results to return
   min_similarity: 0.0  # Minimum similarity score (0-1)
-  strategy: "all"  # Default strategy: "fixed", "semantic", "hierarchical", or "all"
+  strategy: "fixed"  # Default strategy: "fixed", "semantic", or "hierarchical"
   result_format: "detailed"  # "detailed" or "compact"
   
-  # Result merging when querying multiple strategies
-  merge_strategy: "interleave"  # "interleave" or "top_scores"
-  deduplicate: true  # Remove duplicate docs across strategies
-  
-  # Hybrid search (future - optional enhancement)
-  hybrid_search:
-    enabled: false
-    sparse_weight: 0.3
-    dense_weight: 0.7
+  # Hybrid search settings (BM25 + Semantic with RRF)
+  search_mode: "hybrid"  # "semantic", "keyword", or "hybrid"
+  hybrid_alpha: 0.7  # Weight for semantic search (0.0-1.0). 0.7 = 70% semantic, 30% keyword
+  rrf_k: 60  # RRF constant. Higher = less emphasis on top ranks
+  overfetch_factor: 3  # Retrieve this many times top_k before fusion
 
-# Reranking Configuration (future)
+# Query Rewriting Configuration
+query_rewriting:
+  enabled: true  # Enable LLM-based query rewriting
+  temperature: 0.3  # Low temperature for deterministic rewrites
+  max_tokens: 100  # Maximum tokens for rewritten query
+  timeout: 30  # Timeout for rewrite LLM call (seconds)
+  cache_size: 128  # Maximum number of cached query rewrites
+
+# Reranking Configuration
+# Cross-encoder reranking improves retrieval quality by jointly scoring
+# query-document pairs. Over-fetches documents, reranks, returns top results.
+# Note: First reranking call may be slower due to model loading.
 reranking:
-  enabled: false
-  model: null
-  top_n: 5
+  enabled: true
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # HuggingFace cross-encoder model
+  overfetch_k: 50  # Number of documents to retrieve before reranking
+  final_top_k: 10  # Number of documents to return after reranking (overrides retrieval.top_k)
+  batch_size: 32  # Batch size for cross-encoder scoring
+  device: "cpu"  # Device for cross-encoder ("cpu" or "cuda")
 
 # Generation Configuration (Iteration 4)
 generation:
@@ -86,9 +96,9 @@ generation:
   timeout: 180  # Request timeout in seconds (increased for CPU generation)
   
   # Generation parameters
-  temperature: 0.7  # Sampling temperature (0.0-1.0)
-  max_tokens: 256  # Maximum tokens to generate (reduced for faster generation)
-  top_p: 0.9  # Nucleus sampling parameter
+  temperature: 0.3  # Sampling temperature (0.0-1.0)
+  max_tokens: 512  # Maximum tokens to generate (reduced for faster generation)
+  top_p: 0.85  # Nucleus sampling parameter
   
   # Prompt settings
   max_context_length: 2000  # Maximum characters for context in prompt (reduced for speed)

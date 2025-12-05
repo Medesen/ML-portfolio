@@ -49,5 +49,5 @@ def test_config_nested_key_access():
     # Access nested keys (note: config structure is chunking.strategies.fixed)
     assert config.get("chunking.strategies.fixed.enabled") is True
     assert config.get("chunking.strategies.semantic.max_chunk_size") == 1000
-    assert config.get("generation.temperature") == 0.7
+    assert config.get("generation.temperature") == 0.3
 
