@@ -1,7 +1,7 @@
 # Design Principles & Trade-offs
 
-**Version:** 1.0  
-**Last Updated:** October 2025
+**Version:** 1.2  
+**Last Updated:** December 2025
 
 This document explains the design philosophy behind the RAG Pipeline, key architectural decisions, and trade-offs made throughout development.
 
@@ -251,6 +251,9 @@ except Exception as e:
 | **Embeddings** | OpenAI, Cohere, custom models | sentence-transformers | Free, local, industry standard. Easy model swapping. |
 | **LLM** | OpenAI, Anthropic, Cohere | Ollama + Llama 3.2 | Free, local, no API keys. Reproducible for reviewers. |
 | **Chunking** | Just one strategy | Three strategies | Enables empirical comparison. Shows understanding of trade-offs. |
+| **Hybrid Search** | Semantic only | BM25 + semantic with RRF | Combines precision of keywords with semantic understanding. |
+| **Query Enhancement** | None | LLM-based rewriting with caching | Improves retrieval quality; caching avoids repeated LLM calls. |
+| **Reranking** | None | Cross-encoder (ms-marco-MiniLM) | Higher precision; lazy-loaded to minimize startup overhead. |
 | **Config** | JSON, TOML, environment variables | YAML | Human-readable, supports comments, widely used. |
 | **State** | Database, Redis, nothing | JSON files | Simple, transparent, easy to inspect and debug. |
 | **Deployment** | Kubernetes, serverless, manual | Docker Compose | Appropriate for portfolio. Multi-container support. |
@@ -445,6 +448,94 @@ This demonstrates testing ability without being exhaustive.
 **Justification:** Developer experience matters, even in a portfolio project. Waiting 2 minutes every time you test a small change is frustrating. The `--force` flag provides an escape hatch when needed.
 
 **Key insight:** This demonstrates understanding that systems need to be efficient, not just correct.
+
+---
+
+### 6. Hybrid Search vs Pure Semantic Search
+
+**Chosen: Hybrid search (BM25 + semantic with RRF)**
+
+**Pros:**
+- Better handling of exact technical terms (e.g., "fit_transform", "GridSearchCV")
+- Combines precision of keyword matching with semantic understanding
+- Configurable alpha parameter for tuning
+- Industry-standard approach for technical documentation
+
+**Cons:**
+- More complex implementation
+- Requires maintaining BM25 index alongside vector store
+- Slightly higher latency (~20ms overhead)
+- More configuration options to tune
+
+**Alternative: Pure semantic search**
+
+**Pros:**
+- Simpler implementation
+- No additional index to maintain
+- Works well for natural language queries
+
+**Cons:**
+- Struggles with exact technical terms
+- May miss documents with exact keyword matches
+- Less precise for code-related queries
+
+**Justification:** For technical documentation Q&A (especially sklearn APIs), users often search for exact function names. Pure semantic search can miss these because the embedding model focuses on semantic meaning rather than exact tokens. Hybrid search combines the best of both approaches.
+
+---
+
+### 7. Cross-Encoder Reranking vs No Reranking
+
+**Chosen: Cross-encoder reranking (ms-marco-MiniLM-L-6-v2)**
+
+**Pros:**
+- Higher precision in top results
+- Jointly scores query-document pairs (more accurate than bi-encoder)
+- Lazy-loaded to avoid startup overhead
+- Graceful fallback if reranking fails
+
+**Cons:**
+- Added latency (~100-200ms)
+- Additional model to load/maintain
+- Increased memory usage
+- More complex pipeline
+
+**Alternative: No reranking**
+
+**Pros:**
+- Lower latency
+- Simpler implementation
+- Less memory usage
+
+**Cons:**
+- Lower precision in top results
+- Bi-encoder similarity may not reflect true relevance
+- Misses opportunity for quality improvement
+
+**Justification:** For RAG systems, the quality of top retrieved documents directly impacts answer quality. The cross-encoder's ~100ms latency is acceptable for the precision improvement, especially since the LLM generation step takes 2-3 seconds anyway.
+
+---
+
+### 8. LLM Query Rewriting vs No Rewriting
+
+**Chosen: LLM-based query rewriting with caching**
+
+**Pros:**
+- Expands abbreviations (PCA → Principal Component Analysis)
+- Adds relevant synonyms for better recall
+- Removes conversational filler
+- Caching avoids repeated LLM calls
+
+**Cons:**
+- Added latency for cache misses (~500ms)
+- Depends on LLM availability
+- May occasionally produce poor rewrites
+
+**Mitigations:**
+- LRU cache (128 entries) for repeated queries
+- Graceful fallback to original query on failure
+- Low temperature (0.3) for deterministic rewrites
+
+**Justification:** Query rewriting improves retrieval quality by bridging the vocabulary gap between user queries and document content. The caching strategy minimizes the latency impact for repeated or similar queries.
 
 ---
 

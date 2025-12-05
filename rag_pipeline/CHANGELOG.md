@@ -6,6 +6,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0] - 2025-12-05 (Advanced Retrieval Features)
+
+### Added
+
+**Hybrid Search with RRF:**
+- Implemented Reciprocal Rank Fusion (RRF) combining BM25 keyword search with semantic embeddings
+- BM25 index using rank-bm25 with Porter stemming and stopword removal
+- Configurable alpha parameter for semantic/keyword balance (default: 0.7 = 70% semantic)
+- Three search modes: `hybrid`, `semantic`, `keyword`
+- New module: `src/retrieval/bm25_index.py` - BM25 inverted index implementation
+- New module: `src/retrieval/hybrid_searcher.py` - RRF fusion logic
+
+**Query Rewriting:**
+- LLM-based query rewriting for improved retrieval quality
+- Expands abbreviations (e.g., "PCA" → "Principal Component Analysis PCA")
+- Adds scikit-learn synonyms and technical terms
+- Removes conversational filler words
+- LRU caching to avoid redundant LLM calls (configurable cache size: 128)
+- Graceful fallback to original query on LLM failure
+- New module: `src/retrieval/query_rewriter.py`
+
+**Cross-Encoder Reranking:**
+- Cross-encoder reranking using `cross-encoder/ms-marco-MiniLM-L-6-v2`
+- Over-fetches 50 candidates, reranks, returns top 10
+- Lazy model loading to avoid startup overhead
+- Graceful fallback if reranking fails
+- New module: `src/retrieval/reranker.py`
+
+**Benchmark Script:**
+- Script to benchmark different overfetch_k values for reranking
+- Measures latency vs quality trade-offs
+- Usage: `make benchmark ARGS="--overfetch-values 30 50 60"`
+- New script: `scripts/benchmark_overfetch.py`
+
+**Unit Tests:**
+- Added 75 new tests (93 total, up from 18)
+  - `tests/test_hybrid_search.py` - BM25, RRF fusion, alpha weighting (24 tests)
+  - `tests/test_query_rewriter.py` - LLM integration, caching, fallback (23 tests)
+  - `tests/test_reranker.py` - Score reordering, fallback behavior (18 tests)
+  - `tests/test_bm25_strategy_switching.py` - Strategy loading (10 tests)
+
+### Changed
+- `QueryProcessor` now integrates hybrid search, query rewriting, and reranking
+- Makefile: `make query` now includes LLM generation by default
+- Makefile: Added `make query-retrieve` for retrieval-only (no LLM)
+- Makefile: Added `make benchmark` for reranking benchmarks
+- Configuration: Added `query_rewriting` and `reranking` sections to config.yaml
+
+### Configuration Options
+```yaml
+# Hybrid search
+retrieval:
+  search_mode: "hybrid"  # "semantic", "keyword", or "hybrid"
+  hybrid_alpha: 0.7      # 1.0 = pure semantic, 0.0 = pure keyword
+  rrf_k: 60              # RRF dampening factor
+
+# Query rewriting
+query_rewriting:
+  enabled: true
+  temperature: 0.3
+  max_tokens: 100
+  cache_size: 128
+
+# Reranking
+reranking:
+  enabled: true
+  model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  overfetch_k: 50
+  final_top_k: 10
+```
+
+---
+
 ## [1.0.0] - 2025-10-21
 
 ### ✅ Project Complete - All 5 Iterations Finished

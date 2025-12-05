@@ -105,15 +105,15 @@ make setup
 After setup completes, you can immediately start querying:
 
 ```bash
-# Query with retrieval only (shows top relevant document chunks)
+# Query with LLM answer generation (default - retrieval + synthesized answer)
 make query Q="How do I use StandardScaler?"
 
-# Query with LLM answer generation (retrieval + synthesized answer)
-make query-gen Q="How do I use StandardScaler?"
+# Retrieval-only query (no LLM generation, for debugging)
+make query-retrieve Q="How do I use StandardScaler?"
 
 # More examples
-make query-gen Q="What is PCA?"
-make query-gen Q="How to handle missing values?" ARGS="--strategy fixed"
+make query Q="What is PCA?"
+make query Q="How to handle missing values?" ARGS="--strategy fixed"
 
 # Hybrid search (combines BM25 keyword + semantic search)
 make query Q="fit_transform preprocessing" ARGS="--search-mode hybrid"
@@ -146,6 +146,8 @@ The deployment uses Docker Compose to orchestrate Ollama and the RAG pipeline. E
 
 **Query rewriting:** Before retrieval, queries are rewritten by the LLM to improve search quality. The rewriter clarifies ambiguous phrases, expands abbreviations (e.g., "PCA" → "Principal Component Analysis PCA"), adds relevant sklearn synonyms, and removes conversational filler. Results are cached to avoid redundant LLM calls. If rewriting fails, the system gracefully falls back to the original query.
 
+**Cross-encoder reranking:** After initial retrieval, results are reranked using a cross-encoder model (ms-marco-MiniLM-L-6-v2). The system over-fetches ~50 candidates, then the cross-encoder jointly scores each query-document pair for more accurate relevance estimates. This improves precision at the cost of added latency (~100-200ms). The model is lazy-loaded on first use to avoid startup overhead.
+
 **Local LLM trade-off:** I chose Ollama with Llama 3.2 over cloud APIs. This means slower inference (~2-3s vs ~0.5s) and lower quality answers, but it eliminates API costs and makes the project completely reproducible for anyone who clones it.
 
 **Evaluation pivot:** I initially implemented LLM-as-judge for answer quality assessment, but Llama 3.2 3B consistently scored answers 3.5-4.0 regardless of actual quality. Rather than report unreliable metrics, I focused on retrieval metrics (Recall@k, MRR, NDCG) which are objective and reproducible. This is documented in the CHANGELOG.
@@ -172,7 +174,7 @@ The deployment uses Docker Compose to orchestrate Ollama and the RAG pipeline. E
 
 The project includes 93 unit tests demonstrating testing patterns for core components: configuration loading, chunking strategies, evaluation metrics, embedder functionality, hybrid search (BM25, RRF fusion, alpha weighting), query rewriting (LLM integration, caching, fallback behavior), and cross-encoder reranking (score reordering, fallback behavior, timing metadata). The systematic evaluation framework (35 test questions with IR metrics) serves as the primary validation mechanism for end-to-end behavior.
 
-**Test Results:** All 85 tests passing
+**Test Results:** All 93 tests passing
 
 **Production considerations:** This test suite demonstrates patterns but is not exhaustive. For production, I would add comprehensive edge case testing, integration tests, performance tests, mocked external dependencies, and CI/CD integration.
 
@@ -211,7 +213,7 @@ rag_pipeline/
 ├── src/                    # Source code (31 Python modules)
 │   ├── preprocessing/      # HTML → JSON conversion
 │   ├── chunking/          # 3 chunking strategies
-│   ├── retrieval/         # Embeddings, vector store, query processing
+│   ├── retrieval/         # Embeddings, vector store, BM25, hybrid search, reranking
 │   ├── generation/        # LLM integration, prompt building
 │   ├── evaluation/        # Metrics, test loader, results analysis
 │   └── utils/             # Config, logging
@@ -267,8 +269,8 @@ make test-cov           # Tests with coverage report
 # Core operations
 make preprocess         # Process corpus (420 documents)
 make index              # Build vector index (3 strategies)
-make query Q="..."      # Query the system
-make query-gen Q="..."  # Query with LLM answer
+make query Q="..."      # Query with LLM answer generation
+make query-retrieve Q="..."  # Retrieval only (no LLM)
 make eval               # Run evaluation framework
 make eval-quick         # Quick evaluation (5 questions)
 
@@ -286,19 +288,19 @@ make clean-all          # Complete cleanup
 ### Query Examples
 
 ```bash
-# Basic retrieval
+# Query with LLM answer generation (default behavior)
 make query Q="How do I use StandardScaler?"
 
-# With LLM answer generation (shortcut)
-make query-gen Q="What is PCA?"
+# Retrieval only (no LLM generation, useful for debugging)
+make query-retrieve Q="What is PCA?"
 
 # With additional options
 make query Q="cross-validation" ARGS="--strategy fixed --top-k 10"
-make query Q="preprocessing" ARGS="--show-content"
+make query-retrieve Q="preprocessing" ARGS="--show-content"
 make query Q="feature scaling" ARGS="--output results.json"
 
-# Query with generation and strategy
-make query-gen Q="How to handle missing values?" ARGS="--strategy semantic"
+# Query with different chunking strategy
+make query Q="How to handle missing values?" ARGS="--strategy semantic"
 
 # Tip: Use --strategy to override the default in config.yaml on the fly
 make query Q="NearestNeighbors usage" ARGS="--strategy hierarchical"
@@ -356,7 +358,7 @@ chunking:
   semantic:
     max_chunk_size: 1000  # words
   hierarchical:
-    max_chunk_size: 800
+    max_chunk_size: 1000
 
 # Embedding model (easy to swap!)
 embeddings:
@@ -367,7 +369,7 @@ embeddings:
 generation:
   model: "llama3.2:3b"  # or "llama3.1:8b", "mistral:7b"
   temperature: 0.3
-  max_tokens: 256
+  max_tokens: 512
 
 # Retrieval settings
 retrieval:

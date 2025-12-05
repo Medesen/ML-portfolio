@@ -1,7 +1,7 @@
 # System Architecture
 
-**Version:** 1.0  
-**Last Updated:** October 2025
+**Version:** 1.2  
+**Last Updated:** December 2025
 
 This document describes the complete architecture of the RAG Pipeline system, including data flow, component interactions, and infrastructure design.
 
@@ -38,8 +38,12 @@ This document describes the complete architecture of the RAG Pipeline system, in
 │  [3] EMBEDDING → Sentence-Transformers (all-MiniLM-L6-v2)         │
 │         ↓                                                           │
 │  [4] VECTOR STORE → ChromaDB (3 collections, ~86 MB)              │
+│      BM25 INDEX → Keyword search indices (per strategy)           │
 │         ↓                                                           │
-│  [5] QUERY PROCESSING → User Query → Top-K Results                │
+│  [5] QUERY PROCESSING                                              │
+│         ├─ Query Rewriting (LLM-based enhancement)                │
+│         ├─ Hybrid Search (BM25 + semantic with RRF)               │
+│         └─ Cross-Encoder Reranking (ms-marco-MiniLM)              │
 │         ↓                                                           │
 │  [6] GENERATION (Optional) → Ollama + Llama 3.2 → Answer          │
 │                                                                      │
@@ -54,6 +58,8 @@ This document describes the complete architecture of the RAG Pipeline system, in
 | **Vector DB** | ChromaDB | Local, persistent, good for MVP |
 | **Embeddings** | sentence-transformers | Free, local, standard in industry |
 | **LLM** | Ollama + Llama 3.2 | Free, local, no API keys needed |
+| **Keyword Search** | BM25 (rank-bm25) | Industry standard, complements semantic |
+| **Reranking** | Cross-encoder (ms-marco) | High precision, lazy-loaded |
 | **Orchestration** | Docker Compose | Multi-container management |
 | **Config** | YAML | Human-readable, comments supported |
 | **State** | JSON files | Simple, transparent, easy to debug |
@@ -83,14 +89,19 @@ ChromaDB Collections (3 separate)
     ├─ Collection "semantic": 736 embeddings
     └─ Collection "hierarchical": 1675 embeddings
     ↓ [ITERATION 3: Query]
-User Query → Query Embedding (384 dims)
-    ↓ [ITERATION 3: Retrieval]
-Vector Similarity Search (cosine similarity)
+User Query → Query Rewriting (LLM) → Rewritten Query
+    ↓ [ITERATION 3: Embedding]
+Query Embedding (384 dims)
+    ↓ [ITERATION 3: Hybrid Search]
+    ├─ Semantic Search (ChromaDB, top-50)
+    ├─ Keyword Search (BM25, top-50)
+    └─ RRF Fusion (alpha=0.7)
+    ↓ [ITERATION 3: Reranking]
+Cross-Encoder Reranking (ms-marco-MiniLM)
     ↓ [ITERATION 3: Results]
-Top-K Relevant Chunks (default: 20)
-    ├─ Ranked by similarity score
-    ├─ Merged across strategies
-    └─ Deduplicated by doc_id
+Top-K Relevant Chunks (default: 10)
+    ├─ Ranked by rerank score
+    └─ Includes hybrid search metadata
     ↓ [ITERATION 4: Generation - Optional]
 RAG Prompt (query + context + instructions)
     ↓
@@ -122,10 +133,13 @@ Output: [0.023, -0.145, 0.892, ...] (384 dimensions)
 **4. Query → Results (Retrieval)**
 ```
 Input:  "How do I use StandardScaler?"
-Step 1: Embed query → [0.012, -0.098, ...]
-Step 2: Search ChromaDB → Top-20 similar chunks
-Step 3: Rank by L2 distance → similarity scores
-Output: [{"chunk_id": "...", "score": 0.87, "content": "..."}]
+Step 1: Rewrite query (LLM) → "StandardScaler normalize features preprocessing"
+Step 2: Embed query → [0.012, -0.098, ...]
+Step 3: Semantic search (ChromaDB) → Top-50 by similarity
+Step 4: Keyword search (BM25) → Top-50 by term matching
+Step 5: RRF Fusion (alpha=0.7) → Merged ranking
+Step 6: Cross-encoder reranking → Reorder by relevance
+Output: [{"chunk_id": "...", "rerank_score": 2.34, "content": "..."}]
 ```
 
 **5. Results → Answer (Generation - Optional)**
@@ -159,7 +173,11 @@ src/
 │   ├── embedder.py             # Sentence-transformers wrapper
 │   ├── vector_store.py         # ChromaDB interface
 │   ├── indexer.py              # Build vector indices
-│   └── query_processor.py      # Query orchestration
+│   ├── query_processor.py      # Query orchestration
+│   ├── bm25_index.py           # BM25 keyword search index
+│   ├── hybrid_searcher.py      # RRF fusion (BM25 + semantic)
+│   ├── query_rewriter.py       # LLM-based query rewriting
+│   └── reranker.py             # Cross-encoder reranking
 │
 ├── generation/           # [Iteration 4] LLM Integration
 │   ├── llm_client.py           # Ollama API client
@@ -218,7 +236,27 @@ class VectorStore:
 class QueryProcessor:
     def process_query(self, query_text: str, strategy: str, 
                       top_k: int) -> Dict[str, Any]:
-        """Process query and return ranked results"""
+        """Process query with semantic search"""
+        
+    def process_query_hybrid(self, query_text: str, strategy: str,
+                             top_k: int, alpha: float) -> Dict[str, Any]:
+        """Process query with hybrid search (BM25 + semantic + reranking)"""
+```
+
+**HybridSearcher (RRF Fusion)**
+```python
+class HybridSearcher:
+    def search(self, query: str, strategy: str, top_k: int,
+               alpha: float) -> Dict[str, Any]:
+        """Combine semantic and keyword search with RRF"""
+```
+
+**CrossEncoderReranker (Relevance Reranking)**
+```python
+class CrossEncoderReranker:
+    def rerank(self, query: str, results: List[Dict], 
+               top_k: int) -> Dict[str, Any]:
+        """Rerank results using cross-encoder scores"""
 ```
 
 **AnswerGenerator (RAG Generation)**
